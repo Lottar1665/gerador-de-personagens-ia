@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       }
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-lite", 
+        model: "gemini-2.5-pro", 
         contents: conteudoParaEnviar,
         config: { responseMimeType: "application/json" }
       })
