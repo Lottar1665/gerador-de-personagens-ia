@@ -6,7 +6,6 @@ import { LogOut, Sparkles, Upload, Wand2, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ResultsPanel } from "@/components/results-panel"
 
@@ -132,12 +131,11 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
       reader.readAsDataURL(imagemSelecionada)
       base64String = await base64Promise
 
-      // Rota segura do Next.js
       const response = await fetch("/api/gerar-face", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          descricao: "Gerar avatar realista baseado na foto enviada", // Prompt padrão interno
+          descricao: "Gerar avatar realista baseado na foto enviada",
           imagemBase64: base64String,
           mimeType: mimeType
         })
@@ -164,7 +162,6 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
     <Card className="flex h-full flex-col border-border bg-card">
       <CardContent className="flex flex-1 flex-col gap-5 justify-between py-6">
         
-        {/* TITULO DA SEÇÃO */}
         <div className="flex flex-col gap-1">
           <h2 className="text-sm font-semibold">Preview do Avatar</h2>
           <p className="text-xs text-muted-foreground text-pretty">
@@ -175,10 +172,8 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
           </p>
         </div>
 
-        {/* 🎥 CONTAINER DE PREVIEW FIXO: Muda o conteúdo de forma elegante */}
         <div className="flex-1 flex flex-col gap-3 rounded-xl border border-border bg-secondary/10 p-4 min-h-64 justify-center items-center relative">
           {resultadoIA?.previewUrl ? (
-            // CASO A: IA já processou e o link da foto existe
             <div className="relative aspect-square w-full max-h-56 overflow-hidden rounded-lg border border-border bg-muted shadow-lg animate-fade-in">
               <img 
                 src={resultadoIA.previewUrl} 
@@ -187,7 +182,6 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
               />
             </div>
           ) : (
-            // CASO B: Aguardando o usuário fazer o upload da foto
             <div className="flex flex-col items-center justify-center gap-2 text-center py-8 animate-pulse text-muted-foreground/70">
               <div className="flex size-14 items-center justify-center rounded-full bg-secondary/60 border border-border/40 text-muted-foreground/50">
                 👤
@@ -202,10 +196,8 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
           )}
         </div>
 
-        {/* ÁREA DE ANEXO DE FOTO */}
         <UploadArea onFileSelect={setImagemSelecionada} />
 
-        {/* BOTÃO PRINCIPAL DE GERAR */}
         <Button 
           size="lg" 
           className="h-12 w-full text-base font-semibold"
@@ -214,7 +206,7 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
         >
           {isLoading ? (
             <>
-              <span className="animate-spin mr-2">⏳</span> 
+              <span className="animate-spin mr-2">⏳</span>
               Processando Face...
             </>
           ) : (
@@ -229,7 +221,6 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
   )
 }
 
-
 export function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [resultadoIA, setResultadoIA] = useState<any>(null)
 
@@ -240,7 +231,7 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
         <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
           {/* LADO ESQUERDO: INPUT */}
           <div className="lg:h-[calc(100vh-7rem)]">
-            <InputZone onParametrosGerados={setResultadoIA} />
+            <InputZone onParametrosGerados={setResultadoIA} resultadoIA={resultadoIA} />
           </div>
 
           {/* LADO DIREITO: RESULTS */}
