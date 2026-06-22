@@ -125,7 +125,7 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
       const base64Promise = new Promise<string>((resolve) => {
         reader.onloadend = () => {
           const raw = reader.result as string
-          resolve(raw.split(",")[1]) // Pega os dados binários puros
+          resolve(raw.split(",")[1])
         }
       })
       reader.readAsDataURL(imagemSelecionada)
@@ -178,6 +178,7 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
               <img 
                 src={resultadoIA.previewUrl} 
                 alt="Preview do Personagem EA FC" 
+                referrerPolicy="no-referrer"
                 className="h-full w-full object-cover object-center transition-all hover:scale-105"
               />
             </div>
@@ -229,12 +230,10 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
       <TopBar onLogout={onLogout} />
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
         <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
-          {/* LADO ESQUERDO: INPUT */}
           <div className="lg:h-[calc(100vh-7rem)]">
             <InputZone onParametrosGerados={setResultadoIA} resultadoIA={resultadoIA} />
           </div>
 
-          {/* LADO DIREITO: RESULTS */}
           <Card className="border-border bg-card lg:h-[calc(100vh-7rem)]">
             <CardContent className="h-full overflow-hidden">
               <ResultsPanel data={resultadoIA} />
