@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import { GoogleGenAI } from "@google/genai"
-// 🚀 IMPORTAÇÃO CHAVE: Importamos a lista real com centenas de parâmetros do seu app
 import { faceParameters } from "@/lib/face-parameters"
 
 export async function POST(request: Request) {
@@ -14,25 +13,21 @@ export async function POST(request: Request) {
 
     const ai = new GoogleGenAI({ apiKey })
 
-    // 🧠 ENGENHARIA DE PROMPT DINÂMICA: Varremos o arquivo do v0 para extrair todos os nomes exatos de sliders
+    // Monta o mapa de parâmetros idêntico ao front-end
     const estruturaJogoMapeada = faceParameters.map(tab => {
       const subAbas = tab.subTabs.map(sub => {
-        const sliders = sub.groups.flatMap(g => g.sliders).map(s => `"${s.label}"`)
-        return `    "${sub.label}": { ${sliders.join(": 0 a 100, ") || ""} }`
+        const sliders = sub.groups.flatMap(g => g.sliders).map(s => `"${s.label}": 50`)
+        return `    "${sub.label}": { ${sliders.join(", ")} }`
       })
-      return `"${tab.label}": {\n${subAbas.join(",\n")}\n  }`
+      return `  "${tab.label}": {\n${subAbas.join(",\n")}\n  }`
     }).join(",\n")
 
     const promptSistema = `
-      Você é o motor de inteligência artificial de alta precisão do EA FC 26.
-      Sua tarefa é analisar minuciosamente a descrição textual ou os traços antropométricos da foto enviada e convertê-los nos valores exatos de sliders faciais (0 a 100).
+      Você é o motor de IA do EA FC 26. Sua tarefa é analisar a descrição/foto e convertê-la em valores de sliders faciais (0 a 100).
       
-      Você DEVE retornar OBRIGATORIAMENTE apenas um objeto JSON puro e válido, sem qualquer tipo de formatação ou blocos de código markdown (NÃO use aspas triplas ou \`\`\`json).
-      
-      Para que o sistema funcione com erro zero, use EXATAMENTE a estrutura de chaves e nomes de sliders em português listados abaixo. Não invente termos e não mude a grafia. Preencha o máximo de sliders que conseguir identificar com base nos dados do usuário:
-
+      Retorne APENAS o objeto JSON preenchido com as estimativas. Siga EXATAMENTE a estrutura de chaves fornecida abaixo:
       {
-        ${estruturaJogoMapeada}
+${estruturaJogoMapeada}
       }
     `
 
@@ -47,21 +42,33 @@ export async function POST(request: Request) {
       })
     }
 
+    // Disparamos o modelo atualizado configurando o formato estrito de saída JSON
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash", 
       contents: conteudoParaEnviar,
+      config: {
+        // 🔥 Força o servidor do Google a validar o JSON antes de enviar para nós
+        responseMimeType: "application/json"
+      }
     })
 
     const textoResposta = response.text || "{}"
-    console.log("Resposta massiva da IA:", textoResposta)
+    console.log("Resposta corrigida da IA:", textoResposta)
     
-    const jsonLimpo = textoResposta.replace(/```json/g, "").replace(/```/g, "").trim()
-    const dadosConvertidos = JSON.parse(jsonLimpo)
+    // Limpeza de segurança contra quebras de linha ou markdown acidentais
+    const jsonLimpo = textoResposta
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim()
 
+    const dadosConvertidos = JSON.parse(jsonLimpo)
     return NextResponse.json(dadosConvertidos)
 
   } catch (error: any) {
     console.error("Erro interno no servidor de mapeamento:", error)
-    return NextResponse.json({ error: "Erro ao processar a árvore massiva de parâmetros faciais." }, { status: 500 })
+    return NextResponse.json({ 
+      error: "Erro ao processar a árvore massiva de parâmetros faciais.",
+      details: error.message 
+    }, { status: 500 })
   }
 }
