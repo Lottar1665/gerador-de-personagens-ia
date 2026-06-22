@@ -105,43 +105,39 @@ function UploadArea({ onFileSelect }: { onFileSelect: (file: File | null) => voi
   )
 }
 
-function InputZone({ onParametrosGerados }: { onParametrosGerados: (dados: any) => void }) {
+function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: (dados: any) => void, resultadoIA: any }) {
   const [isLoading, setIsLoading] = useState(false)
-  const [textoDescricao, setTextoDescricao] = useState("")
   const [imagemSelecionada, setImagemSelecionada] = useState<File | null>(null)
 
   const handleGerarParametros = async () => {
-    if (!textoDescricao && !imagemSelecionada) {
-      alert("Por favor, digite uma descrição ou anexe uma foto antes de gerar.")
+    if (!imagemSelecionada) {
+      alert("Por favor, anexe uma foto antes de gerar os parâmetros.")
       return
     }
 
     setIsLoading(true)
     try {
-      console.log("Iniciando processamento...")
+      console.log("Iniciando processamento da imagem...")
 
       let base64String = ""
-      let mimeType = ""
+      let mimeType = imagemSelecionada.type
 
-      if (imagemSelecionada) {
-        mimeType = imagemSelecionada.type
-        const reader = new FileReader()
-        const base64Promise = new Promise<string>((resolve) => {
-          reader.onloadend = () => {
-            const raw = reader.result as string
-            resolve(raw.split(",")[1]) // Pega só os dados binários puros
-          }
-        })
-        reader.readAsDataURL(imagemSelecionada)
-        base64String = await base64Promise
-      }
+      const reader = new FileReader()
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onloadend = () => {
+          const raw = reader.result as string
+          resolve(raw.split(",")[1]) // Pega os dados binários puros
+        }
+      })
+      reader.readAsDataURL(imagemSelecionada)
+      base64String = await base64Promise
 
-      // ✅ ROTA SEGURA: Chamamos nossa API interna para processar a IA longe dos olhos do navegador
+      // Rota segura do Next.js
       const response = await fetch("/api/gerar-face", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          descricao: textoDescricao,
+          descricao: "Gerar avatar realista baseado na foto enviada", // Prompt padrão interno
           imagemBase64: base64String,
           mimeType: mimeType
         })
@@ -153,13 +149,11 @@ function InputZone({ onParametrosGerados }: { onParametrosGerados: (dados: any) 
       }
 
       const dadosDoBoneco = await response.json()
-      console.log("Dados recebidos da API:", dadosDoBoneco)
-      
       onParametrosGerados(dadosDoBoneco)
       alert("IA processou o rosto com sucesso!")
       
     } catch (error: any) {
-      console.error("Erro completo mapeado no front:", error)
+      console.error("Erro no front:", error)
       alert(`Erro: ${error.message || "Não foi possível conectar à IA."}`)
     } finally {
       setIsLoading(false)
@@ -168,23 +162,50 @@ function InputZone({ onParametrosGerados }: { onParametrosGerados: (dados: any) 
 
   return (
     <Card className="flex h-full flex-col border-border bg-card">
-      <CardContent className="flex flex-1 flex-col gap-5">
+      <CardContent className="flex flex-1 flex-col gap-5 justify-between py-6">
+        
+        {/* TITULO DA SEÇÃO */}
         <div className="flex flex-col gap-1">
-          <h2 className="text-sm font-semibold">Descreva seu personagem</h2>
+          <h2 className="text-sm font-semibold">Preview do Avatar</h2>
           <p className="text-xs text-muted-foreground text-pretty">
-            Quanto mais detalhes, mais preciso o resultado da IA.
+            {resultadoIA?.previewUrl 
+              ? "Aparência estimada baseada nos sliders calculados." 
+              : "Suba uma foto para visualizar a renderização 3D do seu personagem."
+            }
           </p>
         </div>
 
-        <Textarea
-          placeholder="Descreva como você quer o seu personagem... ex: rosto anguloso, maçãs do rosto altas, queixo definido, olhar marcante."
-          className="min-h-32 flex-1 resize-none bg-secondary/30"
-          value={textoDescricao}
-          onChange={(e) => setTextoDescricao(e.target.value)}
-        />
+        {/* 🎥 CONTAINER DE PREVIEW FIXO: Muda o conteúdo de forma elegante */}
+        <div className="flex-1 flex flex-col gap-3 rounded-xl border border-border bg-secondary/10 p-4 min-h-64 justify-center items-center relative">
+          {resultadoIA?.previewUrl ? (
+            // CASO A: IA já processou e o link da foto existe
+            <div className="relative aspect-square w-full max-h-56 overflow-hidden rounded-lg border border-border bg-muted shadow-lg animate-fade-in">
+              <img 
+                src={resultadoIA.previewUrl} 
+                alt="Preview do Personagem EA FC" 
+                className="h-full w-full object-cover object-center transition-all hover:scale-105"
+              />
+            </div>
+          ) : (
+            // CASO B: Aguardando o usuário fazer o upload da foto
+            <div className="flex flex-col items-center justify-center gap-2 text-center py-8 animate-pulse text-muted-foreground/70">
+              <div className="flex size-14 items-center justify-center rounded-full bg-secondary/60 border border-border/40 text-muted-foreground/50">
+                👤
+              </div>
+              <span className="text-sm font-medium tracking-wide">
+                Seu personagem aparecerá aqui
+              </span>
+              <span className="text-[11px] text-muted-foreground/50 max-w-[200px]">
+                O preview visual 3D será renderizado após o clique no botão abaixo.
+              </span>
+            </div>
+          )}
+        </div>
 
+        {/* ÁREA DE ANEXO DE FOTO */}
         <UploadArea onFileSelect={setImagemSelecionada} />
 
+        {/* BOTÃO PRINCIPAL DE GERAR */}
         <Button 
           size="lg" 
           className="h-12 w-full text-base font-semibold"
@@ -199,7 +220,7 @@ function InputZone({ onParametrosGerados }: { onParametrosGerados: (dados: any) 
           ) : (
             <>
               <Wand2 data-icon="inline-start" className="mr-2" />
-              Gerar Parâmetros com IA
+              {resultadoIA?.previewUrl ? "Regerar Parâmetros com IA" : "Gerar Parâmetros com IA"}
             </>
           )}
         </Button>
@@ -207,6 +228,7 @@ function InputZone({ onParametrosGerados }: { onParametrosGerados: (dados: any) 
     </Card>
   )
 }
+
 
 export function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [resultadoIA, setResultadoIA] = useState<any>(null)
