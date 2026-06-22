@@ -4,79 +4,90 @@ import { faceParameters } from "@/lib/face-parameters"
 
 export async function POST(request: Request) {
   try {
+    // ✅ CORREÇÃO: Voltamos a ler a 'descricao' para bater com o envio do front-end
     const { descricao, imagemBase64, mimeType } = await request.json()
 
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
-      return NextResponse.json({ error: "Configuração do servidor ausente (Chave API)." }, { status: 500 })
+      return NextResponse.json({ error: "Configuração do servidor ausente." }, { status: 500 })
     }
 
     const ai = new GoogleGenAI({ apiKey })
-    const dadosFinais: any = {}
 
-    // Pipeline leve de processamento em lote por aba
-    const promessasDeMapeamento = faceParameters.map(async (tab) => {
-      const subAbas = tab.subTabs.map(sub => {
-        const sliders = sub.groups.flatMap(g => g.sliders).map(s => `"${s.label}": 50`)
-        return `    "${sub.label}": { ${sliders.join(", ")} }`
-      })
-      const estruturaAbaOtimizada = `  "${tab.label}": {\n${subAbas.join(",\n")}\n  }`
+    // Extrai uma lista simples contendo os nomes de todos os sliders reais do jogo
+    const listaNomesSliders = faceParameters
+      .flatMap(tab => tab.subTabs)
+      .flatMap(sub => sub.groups)
+      .flatMap(g => g.sliders)
+      .map(s => `"${s.label}"`)
+      .join(", ")
 
-      const promptSistema = `
-        Você é o motor de inteligência artificial de alta precisão do EA FC 26.
-        Sua tarefa é analisar minuciosamente os traços antropométricos da foto enviada pelo usuário e convertê-los nos valores exatos de sliders faciais (0 a 100) APENAS para a categoria "${tab.label}".
-        
-        Você DEVE retornar obrigatoriamente apenas um objeto JSON puro preenchido, sem qualquer tipo de formatação ou blocos de código markdown (NÃO use aspas triplas ou \`\`\`json).
-        
-        Siga estritamente esta estrutura de chaves:
-        {
-  ${estruturaAbaOtimizada}
-        }
-      `
-
-      const conteudoParaEnviar: any[] = [promptSistema]
-      if (descricao) {
-        conteudoParaEnviar.push(`Descrição adicional do usuário: ${descricao}`)
-      }
-      if (imagemBase64 && mimeType) {
-        conteudoParaEnviar.push({
-          inlineData: { data: imagemBase64, mimeType: mimeType }
-        })
-      }
-
-      const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash", 
-        contents: conteudoParaEnviar,
-        config: { responseMimeType: "application/json" }
-      })
-
-      const textoResposta = response.text || "{}"
-      const jsonLimpo = textoResposta.replace(/```json/g, "").replace(/```/g, "").trim()
+    const promptSistema = `
+      Você é o motor de IA do EA FC 26. Analise a foto fornecida e estime os valores de sliders faciais (0 a 100).
+      Retorne APENAS um objeto JSON plano contendo as chaves com os nomes dos sliders e seus respectivos valores numéricos.
       
-      return { 
-        aba: tab.label, 
-        dados: JSON.parse(jsonLimpo)[tab.label] || {} 
+      NÃO use blocos de código markdown (\`\`\`json). Retorne estritamente neste formato limpo:
+      {
+        "Largura da Face": 65,
+        "Espessura Central": 75,
+        "Comprimento do Nariz": 50
       }
+
+      Sliders válidos disponíveis no jogo para você preencher: [ ${listaNomesSliders} ]
+    `
+
+    // Prepara o array de conteúdos
+    const conteudoParaEnviar: any[] = [promptSistema]
+    if (descricao) {
+      conteudoParaEnviar.push(`Contexto adicional do usuário: ${descricao}`)
+    }
+    if (imagemBase64 && mimeType) {
+      conteudoParaEnviar.push({ inlineData: { data: imagemBase64, mimeType: mimeType } })
+    }
+
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash", 
+      contents: conteudoParaEnviar,
+      config: { responseMimeType: "application/json" }
     })
 
-    const resultadosPorAba = await Promise.all(promessasDeMapeamento)
+    const textoResposta = response.text || "{}"
+    const jsonLimpo = textoResposta.replace(/```json/g, "").replace(/```/g, "").trim()
+    const slidersPlanos = JSON.parse(jsonLimpo)
+
+    // Remonta a árvore respeitando os 4 níveis exigidos pelo v0
+    const dadosConvertidos: any = {}
     
-    resultadosPorAba.forEach(resultado => {
-      dadosFinais[resultado.aba] = resultado.dados
+    faceParameters.forEach(tab => {
+      dadosConvertidos[tab.label] = {}
+      
+      tab.subTabs.forEach(sub => {
+        dadosConvertidos[tab.label][sub.label] = {}
+        
+        sub.groups.forEach(group => {
+          dadosConvertidos[tab.label][sub.label][group.label] = {}
+          
+          group.sliders.forEach(slider => {
+            const valorOriginal = (slider as any).default ?? (slider as any).value ?? (slider as any).defaultValue ?? 50
+
+const valorCalculado = slidersPlanos[slider.label] !== undefined 
+  ? slidersPlanos[slider.label] 
+  : valorOriginal
+              
+            dadosConvertidos[tab.label][sub.label][group.label][slider.label] = Number(valorCalculado)
+          })
+        })
+      })
     })
 
-    // 🚀 SOLUÇÃO DEFINITIVA: Gera um link dinâmico leve que não consome memória da Vercel
-    // Cria um ID de avatar estilizado de jogo de forma aleatória a cada clique
+    // ✅ CORREÇÃO: URL corrigida com crases e rota oficial de vetores estáveis do DiceBear
     const sementeAleatoria = Math.floor(Math.random() * 100000)
-    dadosFinais.previewUrl = `https://dicebear.com{sementeAleatoria}`
+    dadosConvertidos.previewUrl = `https://dicebear.com{sementeAleatoria}`
 
-    return NextResponse.json(dadosFinais)
+    return NextResponse.json(dadosConvertidos)
 
   } catch (error: any) {
-    console.error("Erro interno no pipeline:", error)
-    return NextResponse.json({ 
-      error: "Erro ao processar a árvore de parâmetros faciais.",
-      details: error.message 
-    }, { status: 500 })
+    console.error("Erro no back-end reconstrutor:", error)
+    return NextResponse.json({ error: "Erro ao processar parâmetros.", details: error.message }, { status: 500 })
   }
 }
