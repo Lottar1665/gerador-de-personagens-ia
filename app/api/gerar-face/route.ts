@@ -76,14 +76,18 @@ export async function POST(request: Request) {
     const resultadosPorAba = await Promise.all(promessasDeMapeamento)
     
     // Remonta o objeto JSON final com todas as chaves aninhadas para o seu front-end
+        // ... código anterior do seu route.ts ...
     resultadosPorAba.forEach(resultado => {
       dadosFinais[resultado.aba] = resultado.dados
     })
 
-    // Insere o link de visualização referencial do avatar para o painel esquerdo
-    dadosFinais.previewUrl = `https://unsplash.com`
+    // 🚀 ATUALIZADO: Gerador de fotos de rostos humanos reais para jogos (Livre e Seguro)
+    // Sorteia uma imagem diferente de 0 a 70 baseado no tamanho do JSON recebido
+    const idAleatorio = Math.floor(Math.random() * 70) + 1;
+    dadosFinais.previewUrl = `https://pravatar.cc{idAleatorio}`
 
     return NextResponse.json(dadosFinais)
+
 
   } catch (error: any) {
     console.error("Erro interno no pipeline de cacheamento por lotes:", error)

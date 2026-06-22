@@ -1,11 +1,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   images: {
-    unoptimized: true,
+    dangerouslyAllowSVG: true,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'i.pravatar.cc', // 👈 Registra o domínio da foto
+        port: '',
+        pathname: '/**',
+      },
+    ],
   },
-}
+};
 
-export default nextConfig
+export default nextConfig;
+
