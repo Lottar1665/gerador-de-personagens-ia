@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server"
 import { GoogleGenAI } from "@google/genai"
 import { faceParameters } from "@/lib/face-parameters"
-// 🚀 INCLUSÃO: Motor local de avatares livre de bloqueios do navegador
-import { createAvatar } from "@dicebear/core"
-import { adventurerNeutral } from "@dicebear/collection"
 
 export async function POST(request: Request) {
   try {
@@ -17,7 +14,7 @@ export async function POST(request: Request) {
     const ai = new GoogleGenAI({ apiKey })
     const dadosFinais: any = {}
 
-    // 🚀 PIPELINE DE PROCESSAMENTO EM LOTE E INTEGRAÇÃO DO CACHE
+    // Pipeline leve de processamento em lote por aba
     const promessasDeMapeamento = faceParameters.map(async (tab) => {
       const subAbas = tab.subTabs.map(sub => {
         const sliders = sub.groups.flatMap(g => g.sliders).map(s => `"${s.label}": 50`)
@@ -37,13 +34,10 @@ export async function POST(request: Request) {
         }
       `
 
-      // Ordem focada no Context Caching: Fixo no topo, mutável por último
       const conteudoParaEnviar: any[] = [promptSistema]
-
       if (descricao) {
         conteudoParaEnviar.push(`Descrição adicional do usuário: ${descricao}`)
       }
-
       if (imagemBase64 && mimeType) {
         conteudoParaEnviar.push({
           inlineData: { data: imagemBase64, mimeType: mimeType }
@@ -71,21 +65,15 @@ export async function POST(request: Request) {
       dadosFinais[resultado.aba] = resultado.dados
     })
 
-    // 🚀 INFALÍVEL: Cria uma imagem baseada em texto local direto no servidor
-    const sementeAleatoria = Math.random().toString(36).substring(7)
-    const avatar = createAvatar(adventurerNeutral, {
-      seed: sementeAleatoria,
-      size: 400,
-    })
-
-    // Converte o vetor em uma string binária segura (Data URI) que carrega instantaneamente
-    const svgString = avatar.toDataUri()
-    dadosFinais.previewUrl = svgString
+    // 🚀 SOLUÇÃO DEFINITIVA: Gera um link dinâmico leve que não consome memória da Vercel
+    // Cria um ID de avatar estilizado de jogo de forma aleatória a cada clique
+    const sementeAleatoria = Math.floor(Math.random() * 100000)
+    dadosFinais.previewUrl = `https://dicebear.com{sementeAleatoria}`
 
     return NextResponse.json(dadosFinais)
 
   } catch (error: any) {
-    console.error("Erro interno no servidor de processamento:", error)
+    console.error("Erro interno no pipeline:", error)
     return NextResponse.json({ 
       error: "Erro ao processar a árvore de parâmetros faciais.",
       details: error.message 

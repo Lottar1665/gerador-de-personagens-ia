@@ -5,7 +5,7 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'i.pravatar.cc', // 👈 Registra o domínio da foto
+        hostname: '://dicebear.com', // 🚀 ATUALIZADO: Libera o servidor de avatares
         port: '',
         pathname: '/**',
       },
@@ -14,4 +14,3 @@ const nextConfig = {
 };
 
 export default nextConfig;
-
