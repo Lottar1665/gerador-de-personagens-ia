@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 import { GoogleGenAI } from "@google/genai"
 import { faceParameters } from "@/lib/face-parameters"
+// 🚀 INCLUSÃO: Motor local de avatares livre de bloqueios do navegador
+import { createAvatar } from "@dicebear/core"
+import { adventurerNeutral } from "@dicebear/collection"
 
 export async function POST(request: Request) {
   try {
@@ -14,9 +17,8 @@ export async function POST(request: Request) {
     const ai = new GoogleGenAI({ apiKey })
     const dadosFinais: any = {}
 
-    // 🚀 ENGENHARIA DE PROCESSAMENTO EM LOTE E CACHE PARALELO
+    // 🚀 PIPELINE DE PROCESSAMENTO EM LOTE E INTEGRAÇÃO DO CACHE
     const promessasDeMapeamento = faceParameters.map(async (tab) => {
-      // Gera a árvore de chaves estática baseada no seu arquivo de configuração
       const subAbas = tab.subTabs.map(sub => {
         const sliders = sub.groups.flatMap(g => g.sliders).map(s => `"${s.label}": 50`)
         return `    "${sub.label}": { ${sliders.join(", ")} }`
@@ -35,32 +37,23 @@ export async function POST(request: Request) {
         }
       `
 
-      // 🧠 REGRA DE OURO DO CACHE: O conteúdo imutável e massivo (System Prompt) DEVE ser o primeiro!
+      // Ordem focada no Context Caching: Fixo no topo, mutável por último
       const conteudoParaEnviar: any[] = [promptSistema]
 
-      // O texto descritivo complementar (se existir) entra na sequência
       if (descricao) {
         conteudoParaEnviar.push(`Descrição adicional do usuário: ${descricao}`)
       }
 
-      // Os binários mutáveis da imagem (que mudam a cada requisição) entram por ÚLTIMO de tudo.
-      // Isso permite que o Google congele o topo do prompt e processe apenas o final, economizando tempo e tokens.
       if (imagemBase64 && mimeType) {
         conteudoParaEnviar.push({
-          inlineData: { 
-            data: imagemBase64, 
-            mimeType: mimeType 
-          }
+          inlineData: { data: imagemBase64, mimeType: mimeType }
         })
       }
 
-      // Disparamos o modelo Flash-Lite (focado em latência ultra-baixa)
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-lite", 
         contents: conteudoParaEnviar,
-        config: { 
-          responseMimeType: "application/json" 
-        }
+        config: { responseMimeType: "application/json" }
       })
 
       const textoResposta = response.text || "{}"
@@ -72,27 +65,29 @@ export async function POST(request: Request) {
       }
     })
 
-    // Aguarda o retorno de todas as abas processadas em paralelo pelos servidores da Google
     const resultadosPorAba = await Promise.all(promessasDeMapeamento)
     
-    // Remonta o objeto JSON final com todas as chaves aninhadas para o seu front-end
-        // ... código anterior do seu route.ts ...
     resultadosPorAba.forEach(resultado => {
       dadosFinais[resultado.aba] = resultado.dados
     })
 
-    // 🚀 ATUALIZADO: Gerador de fotos de rostos humanos reais para jogos (Livre e Seguro)
-    // Sorteia uma imagem diferente de 0 a 70 baseado no tamanho do JSON recebido
-    const idAleatorio = Math.floor(Math.random() * 70) + 1;
-    dadosFinais.previewUrl = `https://pravatar.cc{idAleatorio}`
+    // 🚀 INFALÍVEL: Cria uma imagem baseada em texto local direto no servidor
+    const sementeAleatoria = Math.random().toString(36).substring(7)
+    const avatar = createAvatar(adventurerNeutral, {
+      seed: sementeAleatoria,
+      size: 400,
+    })
+
+    // Converte o vetor em uma string binária segura (Data URI) que carrega instantaneamente
+    const svgString = avatar.toDataUri()
+    dadosFinais.previewUrl = svgString
 
     return NextResponse.json(dadosFinais)
 
-
   } catch (error: any) {
-    console.error("Erro interno no pipeline de cacheamento por lotes:", error)
+    console.error("Erro interno no servidor de processamento:", error)
     return NextResponse.json({ 
-      error: "Erro ao processar a árvore massiva de parâmetros faciais.",
+      error: "Erro ao processar a árvore de parâmetros faciais.",
       details: error.message 
     }, { status: 500 })
   }
