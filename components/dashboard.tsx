@@ -45,6 +45,11 @@ function UploadArea({ onFileSelect }: { onFileSelect: (file: File | null) => voi
   const handleFileChange = (file: File | null) => {
     setFileName(file ? file.name : null)
     onFileSelect(file)
+    
+    // CORREÇÃO: Limpa o input nativo para permitir reenvio do mesmo arquivo
+    if (!file && inputRef.current) {
+      inputRef.current.value = ""
+    }
   }
 
   return (
@@ -74,13 +79,14 @@ function UploadArea({ onFileSelect }: { onFileSelect: (file: File | null) => voi
           dragging && "border-primary bg-primary/10",
         )}
       >
-        <span className="flex size-10 items-center justify-center rounded-full bg-primary/15 text-primary">
+        {/* CORREÇÃO: pointer-events-none nos filhos para evitar pisca-pisca no drag and drop */}
+        <span className="pointer-events-none flex size-10 items-center justify-center rounded-full bg-primary/15 text-primary">
           <Upload className="size-5" />
         </span>
-        <span className="text-sm font-medium">
+        <span className="pointer-events-none text-sm font-medium">
           Arraste sua foto aqui ou clique para anexar
         </span>
-        <span className="text-xs text-muted-foreground">
+        <span className="pointer-events-none text-xs text-muted-foreground">
           PNG, JPG ou WEBP até 10MB
         </span>
       </button>
@@ -122,12 +128,19 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
       let mimeType = imagemSelecionada.type
 
       const reader = new FileReader()
-      const base64Promise = new Promise<string>((resolve) => {
+      
+      // Promise robusta com reject e tratamento de tipo
+      const base64Promise = new Promise<string>((resolve, reject) => {
         reader.onloadend = () => {
-          const raw = reader.result as string
-          resolve(raw.split(",")[1])
+          if (typeof reader.result === "string") {
+            resolve(reader.result.split(",")[1])
+          } else {
+            reject(new Error("Não foi possível processar a imagem."))
+          }
         }
+        reader.onerror = () => reject(new Error("Erro na leitura do arquivo."))
       })
+      
       reader.readAsDataURL(imagemSelecionada)
       base64String = await base64Promise
 
@@ -136,17 +149,36 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           descricao: "Gerar avatar realista baseado na foto enviada",
-          imagemBase64: base64String,
+          imageBase64: base64String,
           mimeType: mimeType
         })
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Falha na requisição.")
+      // 1. Verifica se a resposta é um JSON válido antes de fazer o parse
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const textoErro = await response.text()
+        console.error("Resposta inesperada do servidor:", textoErro)
+        throw new Error("O servidor falhou ou a rota da API não foi encontrada (veja o console).")
       }
 
+      // 2. Se for JSON, continua o processo normal
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Falha na requisição da API.")
+      }
+
+      // 3. Lê o JSON apenas uma vez com sucesso!
       const dadosDoBoneco = await response.json()
+
+      // 🚀 O SEGREDO: Verificação e Injeção no Estado Central
+      if (dadosDoBoneco.previewUrl) {
+        console.log("✅ Imagem 3D recebida com sucesso no Front-end!")
+      } else {
+        console.warn("⚠️ Aviso: Os parâmetros chegaram, mas o previewUrl da imagem não veio do backend.")
+      }
+
+      // Envia todos os dados (parâmetros + previewUrl) de uma vez só para o estado "resultadoIA"
       onParametrosGerados(dadosDoBoneco)
       alert("IA processou o rosto com sucesso!")
       
@@ -175,11 +207,15 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
         <div className="flex-1 flex flex-col gap-3 rounded-xl border border-border bg-secondary/10 p-4 min-h-64 justify-center items-center relative">
           {resultadoIA?.previewUrl ? (
             <div className="relative aspect-square w-full max-h-56 overflow-hidden rounded-lg border border-border bg-muted shadow-lg animate-fade-in">
+              {/* CORREÇÃO: Tratamento de erro onError caso a URL da imagem quebre */}
               <img 
                 src={resultadoIA.previewUrl} 
                 alt="Preview do Personagem EA FC" 
                 referrerPolicy="no-referrer"
                 className="h-full w-full object-cover object-center transition-all hover:scale-105"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
               />
             </div>
           ) : (
