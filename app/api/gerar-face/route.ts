@@ -9,10 +9,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Imagem não fornecida." }, { status: 400 })
     }
 
-    // O Ollama e o Fooocus esperam o Base64 "limpo" (sem o cabeçalho 'data:image/jpeg;base64,')
+    // Limpa o cabeçalho do Base64
     const rawBase64 = imageBase64.includes(",") ? imageBase64.split(",")[1] : imageBase64
 
-    // Extracts all valid slider labels from the game configurations file
+    // Puxa a URL dinâmica da Vercel (Localtunnel) ou usa localhost se estiver rodando no seu PC
+    const ollamaBaseUrl = process.env.OLLAMA_URL || "http://localhost:11434"
+
     const sliderLabelsList = faceParameters
       .flatMap(tab => tab.subTabs)
       .flatMap(sub => sub.groups)
@@ -23,7 +25,6 @@ export async function POST(request: Request) {
     const systemPrompt = `
       You are the core AI engine of EA FC 26 game. Analyze the visual facial features provided and estimate facial slider values (from 0 to 100).
       Return EXCLUSIVELY a clean, raw flat JSON object mapping the slider names to their calculated numeric percent integers. 
-      Do not include any conversational text, no introductions, no explanations, and no markdown formatting blocks.
       
       Strict output template format:
       {
@@ -34,12 +35,15 @@ export async function POST(request: Request) {
       Valid available sliders for you to populate: [ ${sliderLabelsList} ]
     `
 
-    console.log("1. Extraindo parâmetros no Ollama...")
+    console.log(`1. Conectando ao Ollama no endereço: ${ollamaBaseUrl}...`)
     
-    // 🚀 OLLAMA (LLaVA)
-    const ollamaResponse = await fetch("http://localhost:11434/api/generate", {
+    // 🚀 OLLAMA (Lê a foto usando o túnel)
+    const ollamaResponse = await fetch(`${ollamaBaseUrl}/api/generate`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Bypass-Tunnel-Reminder": "true" // Fura a tela de bloqueio do Localtunnel
+      },
       body: JSON.stringify({
         model: "llava", 
         prompt: systemPrompt,
@@ -49,7 +53,7 @@ export async function POST(request: Request) {
       })
     })
 
-    if (!ollamaResponse.ok) throw new Error("Local Ollama connection refused.")
+    if (!ollamaResponse.ok) throw new Error("A conexão pelo túnel com o Ollama foi recusada.")
 
     const ollamaData = await ollamaResponse.json()
     const rawTextResponse = ollamaData.response || "{}"
@@ -58,13 +62,13 @@ export async function POST(request: Request) {
     const jsonEndIndex = rawTextResponse.lastIndexOf("}")
     
     if (jsonStartIndex === -1 || jsonEndIndex === -1) {
-      throw new Error(`Ollama returned an incomplete or invalid string payload: ${rawTextResponse}`)
+      throw new Error(`Ollama retornou um formato inválido: ${rawTextResponse}`)
     }
 
     const sanitizedJsonString = rawTextResponse.substring(jsonStartIndex, jsonEndIndex + 1).trim()
     const flatSlidersMap = JSON.parse(sanitizedJsonString)
 
-    // Reconstructs the 4-level layout tree required by the results panel
+    // Reconstrói a árvore para preencher a interface do site
     const structureResult: any = {}
     faceParameters.forEach(tab => {
       structureResult[tab.label] = {}
@@ -83,74 +87,15 @@ export async function POST(request: Request) {
       })
     })
 
-    // Prepares the text summary instruction prompt for Fooocus
-    structureResult.resumoPrompt = `3D game avatar character render, EA FC 26 player selection screen, face close-up, Frostbite engine graphics, jaw width ${flatSlidersMap["Largura da Mandíbula"] || 50}, nose shape ${flatSlidersMap["Largura da Ponta do Nariz"] || 50}`
+    // Como não vamos gerar imagem 3D, devolvemos null para a imagem não quebrar
+    structureResult.previewUrl = null;
 
-    console.log("2. Gerando Imagem 3D no Fooocus API...")
+    console.log("✅ Sucesso! Parâmetros gerados e enviados para o frontend.")
 
-    // 🚀 FOOOCUS API
-    try {
-      const fooocusResponse = await fetch("http://127.0.0.1:8888/v1/generation/text-to-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: structureResult.resumoPrompt,
-          negative_prompt: "cartoon, anime, bad anatomy, deformed, sketch, ugly, realistic photograph",
-          style_selections: ["Fooocus V2", "Fooocus Masterpiece"],
-          performance_selection: "Speed", 
-          aspect_ratio: "1:1",
-          require_base64: true, // Força o envio da imagem de volta
-          image_prompts: [
-            {
-              cn_img: rawBase64, 
-              cn_stop: 0.85,
-              cn_weight: 0.85,
-              cn_type: "FaceSwap"
-            }
-          ]
-        })
-      })
-
-      if (fooocusResponse.ok) {
-        const fooocusData = await fooocusResponse.json()
-        
-        console.log("📥 Resposta crua do Fooocus:", JSON.stringify(fooocusData).substring(0, 200) + "...") 
-        
-        let imagemBase64 = null;
-
-        if (Array.isArray(fooocusData) && fooocusData.length > 0) {
-            imagemBase64 = fooocusData[0].base64 || fooocusData[0].url;
-        } else if (fooocusData.images && fooocusData.images.length > 0) {
-            imagemBase64 = fooocusData.images[0].base64 || fooocusData.images[0].url;
-        } else if (fooocusData.data && fooocusData.data.length > 0) {
-            imagemBase64 = fooocusData.data[0].base64 || fooocusData.data[0].url;
-        }
-
-        if (imagemBase64) {
-          // Verifica e formata a imagem de forma inteligente
-          if (imagemBase64.startsWith("http") || imagemBase64.startsWith("data:image")) {
-            structureResult.previewUrl = imagemBase64;
-          } else {
-            structureResult.previewUrl = `data:image/png;base64,${imagemBase64}`;
-          }
-          console.log("✅ 3. Sucesso! Imagem extraída e pronta para o frontend.")
-        } else {
-          console.error("❌ Aviso: A API respondeu com sucesso, mas não encontramos a chave 'base64'.")
-        }
-      } else {
-        const erroDetalhado = await fooocusResponse.text()
-        console.error("❌ O FOOOCUS RECUSOU O PEDIDO:", erroDetalhado)
-      }
-    } catch (fooocusError) {
-      console.error("❌ FALHA DE CONEXÃO COM O FOOOCUS:", fooocusError)
-    }
-
-    // Sucesso Total! Retorna os parâmetros do Ollama e a Imagem do Fooocus para a tela
     return NextResponse.json(structureResult)
 
   } catch (error: any) {
-    // Esse catch captura erros gerais (ex: Ollama fora do ar)
     console.error("❌ Erro geral na API:", error)
-    return NextResponse.json({ error: "Local pipeline processing error.", details: error.message }, { status: 500 })
+    return NextResponse.json({ error: `Falha na requisição: ${error.message}` }, { status: 500 })
   }
 }
