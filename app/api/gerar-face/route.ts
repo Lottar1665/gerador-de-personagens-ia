@@ -16,24 +16,40 @@ export async function POST(request: Request) {
     const ollamaBaseUrl = process.env.OLLAMA_URL || "http://localhost:11434"
 
     const sliderLabelsList = faceParameters
-      .flatMap(tab => tab.subTabs)
-      .flatMap(sub => sub.groups)
-      .flatMap(g => g.sliders)
-      .map(s => `"${s.label}"`)
-      .join(", ")
+  .flatMap(tab => tab.subTabs)
+  .flatMap(sub => sub.groups)
+  .flatMap(g => g.sliders)
+  .map(s => `"${s.labelAI}"`)
+  .join(", ")
 
     const systemPrompt = `
-      You are the core AI engine of EA FC 26 game. Analyze the visual facial features provided and estimate facial slider values (from 0 to 100).
-      Return EXCLUSIVELY a clean, raw flat JSON object mapping the slider names to their calculated numeric percent integers. 
-      
-      Strict output template format:
-      {
-        "Largura da Face": 65,
-        "Espessura Central": 75
-      }
+You are an EA FC 26 face analysis engine.
 
-      Valid available sliders for you to populate: [ ${sliderLabelsList} ]
-    `
+Analyze the face in the image.
+
+Return ONLY a flat JSON object.
+
+Rules:
+
+1. Use ONLY the slider names provided.
+2. Return integer values between 0 and 100.
+3. Do NOT explain anything.
+4. Do NOT add markdown.
+5. Do NOT create nested objects.
+6. Populate as many sliders as possible.
+
+Example:
+
+{
+  "skull width": 63,
+  "skull height": 58,
+  "nose width": 72
+}
+
+Valid sliders:
+
+[ ${sliderLabelsList} ]
+`
 
     console.log(`1. Conectando ao Ollama no endereço: ${ollamaBaseUrl}...`)
     
@@ -68,6 +84,11 @@ export async function POST(request: Request) {
     const sanitizedJsonString = rawTextResponse.substring(jsonStartIndex, jsonEndIndex + 1).trim()
     const flatSlidersMap = JSON.parse(sanitizedJsonString)
 
+    console.log("================================")
+console.log("JSON RECEBIDO DA IA")
+console.log(flatSlidersMap)
+console.log("================================")
+
     // Reconstrói a árvore para preencher a interface do site
     const structureResult: any = {}
     faceParameters.forEach(tab => {
@@ -78,9 +99,12 @@ export async function POST(request: Request) {
           structureResult[tab.label][sub.label][group.label] = {}
           group.sliders.forEach(slider => {
             const fallbackValue = (slider as any).default ?? (slider as any).value ?? 50
-            const computedValue = flatSlidersMap[slider.label] !== undefined 
-              ? flatSlidersMap[slider.label] 
-              : fallbackValue
+            const aiValue = flatSlidersMap[slider.labelAI]
+
+const computedValue =
+  typeof aiValue === "number"
+    ? Math.max(0, Math.min(100, aiValue))
+    : fallbackValue
             structureResult[tab.label][sub.label][group.label][slider.label] = Number(computedValue)
           })
         })

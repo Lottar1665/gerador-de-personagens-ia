@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ResultsPanel } from "@/components/results-panel"
+import PresetsCarousel from "./presets-carousel"
 
 function TopBar({ onLogout }: { onLogout: () => void }) {
   return (
@@ -113,6 +114,17 @@ function UploadArea({ onFileSelect }: { onFileSelect: (file: File | null) => voi
 function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: (dados: any) => void, resultadoIA: any }) {
   const [isLoading, setIsLoading] = useState(false)
   const [imagemSelecionada, setImagemSelecionada] = useState<File | null>(null)
+  const [imagemPreview, setImagemPreview] = useState<string | null>(null)
+
+  const handleFileSelect = (file: File | null) => {
+    setImagemSelecionada(file)
+    if (file) {
+      const urlTemporaria = URL.createObjectURL(file)
+      setImagemPreview(urlTemporaria)
+    } else {
+      setImagemPreview(null)
+    }
+  }
 
   const handleGerarParametros = async () => {
     if (!imagemSelecionada) {
@@ -129,7 +141,6 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
 
       const reader = new FileReader()
       
-      // Promise robusta com reject e tratamento de tipo
       const base64Promise = new Promise<string>((resolve, reject) => {
         reader.onloadend = () => {
           if (typeof reader.result === "string") {
@@ -148,39 +159,25 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          descricao: "Gerar avatar realista baseado na foto enviada",
+          descricao: "Extrair parâmetros faciais da foto",
           imageBase64: base64String,
           mimeType: mimeType
         })
       })
 
-      // 1. Verifica se a resposta é um JSON válido antes de fazer o parse
       const contentType = response.headers.get("content-type")
       if (!contentType || !contentType.includes("application/json")) {
-        const textoErro = await response.text()
-        console.error("Resposta inesperada do servidor:", textoErro)
-        throw new Error("O servidor falhou ou a rota da API não foi encontrada (veja o console).")
+        throw new Error("O servidor falhou ou a rota da API não foi encontrada.")
       }
 
-      // 2. Se for JSON, continua o processo normal
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || "Falha na requisição da API.")
       }
 
-      // 3. Lê o JSON apenas uma vez com sucesso!
       const dadosDoBoneco = await response.json()
 
-      // 🚀 O SEGREDO: Verificação e Injeção no Estado Central
-      if (dadosDoBoneco.previewUrl) {
-        console.log("✅ Imagem 3D recebida com sucesso no Front-end!")
-      } else {
-        console.warn("⚠️ Aviso: Os parâmetros chegaram, mas o previewUrl da imagem não veio do backend.")
-      }
-
-      // Envia todos os dados (parâmetros + previewUrl) de uma vez só para o estado "resultadoIA"
       onParametrosGerados(dadosDoBoneco)
-      alert("IA processou o rosto com sucesso!")
       
     } catch (error: any) {
       console.error("Erro no front:", error)
@@ -192,64 +189,60 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
 
   return (
     <Card className="flex h-full flex-col border-border bg-card">
-      <CardContent className="flex flex-1 flex-col gap-5 justify-between py-6">
+      <CardContent className="flex flex-1 flex-col gap-6 justify-between py-6">
         
-        <div className="flex flex-col gap-1">
-          <h2 className="text-sm font-semibold">Preview do Avatar</h2>
-          <p className="text-xs text-muted-foreground text-pretty">
-            {resultadoIA?.previewUrl 
-              ? "Aparência estimada baseada nos sliders calculados." 
-              : "Suba uma foto para visualizar a renderização 3D do seu personagem."
-            }
-          </p>
-        </div>
-
-        <div className="flex-1 flex flex-col gap-3 rounded-xl border border-border bg-secondary/10 p-4 min-h-64 justify-center items-center relative">
-          {resultadoIA?.previewUrl ? (
-            <div className="relative aspect-square w-full max-h-56 overflow-hidden rounded-lg border border-border bg-muted shadow-lg animate-fade-in">
-              {/* CORREÇÃO: Tratamento de erro onError caso a URL da imagem quebre */}
+        {/* PARTE DE CIMA: Carrossel ou Imagem do Usuário */}
+        <div className="flex-1 flex flex-col justify-center items-center w-full min-h-[340px] bg-secondary/5 rounded-xl border border-border/50 p-4 relative overflow-hidden transition-all">
+          
+          {imagemPreview ? (
+            <div className="relative w-full max-w-[280px] rounded-xl overflow-hidden shadow-2xl border border-zinc-700 animate-fade-in">
               <img 
-                src={resultadoIA.previewUrl} 
-                alt="Preview do Personagem EA FC" 
-                referrerPolicy="no-referrer"
-                className="h-full w-full object-cover object-center transition-all hover:scale-105"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                }}
+                src={imagemPreview} 
+                alt="Foto em análise" 
+                className="w-full h-auto object-cover opacity-90"
               />
+              
+              <div className="absolute inset-0 bg-gradient-to-t from-emerald-500/10 to-transparent pointer-events-none" />
+              
+              {isLoading && (
+                <div className="absolute top-0 left-0 w-full h-[2px] bg-emerald-400 shadow-[0_0_8px_2px_rgba(52,211,153,0.8)] animate-scan" />
+              )}
+
+              <div className="absolute top-2 right-2 bg-black/80 text-emerald-400 text-[10px] font-mono px-2 py-1 rounded backdrop-blur-md border border-emerald-500/30 tracking-widest flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                {isLoading ? "CALCULANDO..." : "BIOMETRIA ATIVA"}
+              </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center gap-2 text-center py-8 animate-pulse text-muted-foreground/70">
-              <div className="flex size-14 items-center justify-center rounded-full bg-secondary/60 border border-border/40 text-muted-foreground/50">
-                👤
-              </div>
-              <span className="text-sm font-medium tracking-wide">
-                Seu personagem aparecerá aqui
-              </span>
-              <span className="text-[11px] text-muted-foreground/50 max-w-[200px]">
-                O preview visual 3D será renderizado após o clique no botão abaixo.
-              </span>
-            </div>
+             <PresetsCarousel />
           )}
+
         </div>
 
-        <UploadArea onFileSelect={setImagemSelecionada} />
+        {/* PARTE DO MEIO: Upload */}
+        <div className="w-full">
+          <UploadArea onFileSelect={handleFileSelect} />
+        </div>
 
+        {/* PARTE DE BAIXO: Botão com a Trava de Segurança */}
         <Button 
           size="lg" 
-          className="h-12 w-full text-base font-semibold"
+          className="h-12 w-full text-base font-semibold transition-all shadow-md hover:shadow-primary/20"
           onClick={handleGerarParametros}
-          disabled={isLoading}
+          disabled={isLoading || !imagemSelecionada} 
         >
           {isLoading ? (
             <>
               <span className="animate-spin mr-2">⏳</span>
-              Processando Face...
+              Analisando Proporções...
             </>
           ) : (
             <>
               <Wand2 data-icon="inline-start" className="mr-2" />
-              {resultadoIA?.previewUrl ? "Regerar Parâmetros com IA" : "Gerar Parâmetros com IA"}
+              {resultadoIA ? "Regerar Parâmetros" : "Extrair Parâmetros com IA"}
             </>
           )}
         </Button>

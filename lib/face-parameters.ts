@@ -1,8 +1,12 @@
 export type Slider = {
   id: string
   label: string
-  /** Valor de 0 a 100 */
-  value: number
+  /** O idioma em inglês que vai oculto para a inteligência artificial */
+  labelAI: string
+  /** Valor padrão onde a barra começa (geralmente 50) */
+  default: number
+  /** Valor dinâmico que a IA vai preencher depois */
+  value?: number
   /** Marcado como concluído dentro do jogo */
   done?: boolean
 }
@@ -32,354 +36,523 @@ export type MainTab = {
  * Tabs (Nível 1) -> Sub-tabs (Nível 2) -> Accordions (Nível 3) -> Sliders (Nível 4)
  */
 export const faceParameters: MainTab[] = [
+  // ==========================================
+  // 1. CABEÇA
+  // ==========================================
   {
-    id: "cabeca",
+    id: "head",
     label: "Cabeça",
     subTabs: [
       {
-        id: "formato",
-        label: "Formato",
+        id: "skull",
+        label: "Crânio",
         groups: [
           {
-            id: "estrutura-craniana",
-            label: "Estrutura Craniana",
+            id: "skull-adjustments",
+            label: "Ajustes de Proporção", 
             defaultOpen: true,
             sliders: [
-              { id: "c1", label: "Largura", value: 62 },
-              { id: "c2", label: "Altura", value: 48 },
-              { id: "c3", label: "Profundidade", value: 55, done: true },
-              { id: "c4", label: "Inclinação", value: 40 },
-              { id: "c5", label: "Arredondamento", value: 71 },
-            ],
-          },
-          {
-            id: "linha-do-cabelo",
-            label: "Linha do Cabelo",
-            sliders: [
-              { id: "c6", label: "Recuo", value: 33 },
-              { id: "c7", label: "Densidade", value: 80 },
-            ],
-          },
-        ],
+              { id: "sk1", label: "Fino / Ampliar", labelAI: "skull width", default: 50 },
+              { id: "sk2", label: "Baixo / Cima", labelAI: "skull height", default: 50 },
+              { id: "sk3", label: "Neutro / Frente", labelAI: "skull forward protrusion", default: 50 },
+              { id: "sk4", label: "Redondo / Anguloso", labelAI: "skull angularity", default: 50 },
+              { id: "sk5", label: "Mover Esq. / Dir.", labelAI: "skull horizontal asymmetry", default: 50 }
+            ]
+          }
+        ]
       },
       {
-        id: "pele",
-        label: "Pele",
+        id: "crown-of-head",
+        label: "Coroa da cabeça",
         groups: [
           {
-            id: "tom",
-            label: "Tom da Pele",
+            id: "crown-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
             sliders: [
-              { id: "c8", label: "Saturação", value: 52 },
-              { id: "c9", label: "Brilho", value: 44 },
-              { id: "c10", label: "Vermelhidão", value: 38 },
-            ],
-          },
-          {
-            id: "textura",
-            label: "Textura",
-            sliders: [
-              { id: "c11", label: "Rugosidade", value: 21 },
-              { id: "c12", label: "Poros", value: 35 },
-            ],
-          },
-        ],
+              { id: "cr1", label: "Fino / Ampliar", labelAI: "crown width", default: 50 },
+              { id: "cr2", label: "Baixo / Cima", labelAI: "crown height", default: 50 },
+              { id: "cr3", label: "Voltar / Frente", labelAI: "crown depth", default: 50 },
+              { id: "cr4", label: "Neutro / Redondo", labelAI: "crown roundness", default: 50 },
+              { id: "cr5", label: "Mover Esq. / Dir.", labelAI: "crown horizontal asymmetry", default: 50 }
+            ]
+          }
+        ]
       },
       {
-        id: "esqueleto",
-        label: "Esqueleto",
+        id: "back-of-skull",
+        label: "Parte de trás do crânio",
         groups: [
           {
-            id: "macas-do-rosto",
-            label: "Maçãs do Rosto",
+            id: "back-skull-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
             sliders: [
-              { id: "c13", label: "Altura", value: 58 },
-              { id: "c14", label: "Largura", value: 47 },
-              { id: "c15", label: "Projeção", value: 63 },
-            ],
-          },
-        ],
+              { id: "bk1", label: "Fino / Ampliar", labelAI: "back of skull width", default: 50 },
+              { id: "bk2", label: "Baixo / Cima", labelAI: "back of skull height", default: 50 },
+              { id: "bk3", label: "Voltar / Frente", labelAI: "back of skull depth", default: 50 },
+              { id: "bk4", label: "Redondo / Anguloso", labelAI: "back of skull angularity", default: 50 },
+              { id: "bk5", label: "Mover Esq. / Dir.", labelAI: "back of skull horizontal asymmetry", default: 50 }
+            ]
+          }
+        ]
       },
-    ],
+      {
+        id: "temples",
+        label: "Têmporas",
+        groups: [
+          {
+            id: "temples-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
+            sliders: [
+              { id: "tp1", label: "Fino / Ampliar", labelAI: "temples width", default: 50 },
+              { id: "tp2", label: "Baixo / Cima", labelAI: "temples height", default: 50 },
+              { id: "tp3", label: "Voltar / Frente", labelAI: "temples depth", default: 50 },
+              { id: "tp4", label: "Redondo / Anguloso", labelAI: "temples angularity", default: 50 }
+            ]
+          }
+        ]
+      }
+    ]
   },
+
+  // ==========================================
+  // 2. TESTA
+  // ==========================================
   {
-    id: "olhos",
-    label: "Olhos",
+    id: "forehead",
+    label: "Testa",
     subTabs: [
       {
-        id: "formato",
-        label: "Formato",
+        id: "upper-forehead",
+        label: "Parte superior da testa",
         groups: [
           {
-            id: "globo-ocular",
-            label: "Globo Ocular",
+            id: "upper-forehead-adjustments",
+            label: "Ajustes de Proporção",
             defaultOpen: true,
             sliders: [
-              { id: "o1", label: "Tamanho", value: 55 },
-              { id: "o2", label: "Largura", value: 49 },
-              { id: "o3", label: "Profundidade", value: 42, done: true },
-              { id: "o4", label: "Rotação", value: 38 },
-            ],
-          },
-          {
-            id: "palpebras",
-            label: "Pálpebras",
-            sliders: [
-              { id: "o5", label: "Superior", value: 60 },
-              { id: "o6", label: "Inferior", value: 44 },
-              { id: "o7", label: "Abertura", value: 67 },
-            ],
-          },
-        ],
+              { id: "uf1", label: "Fino / Ampliar", labelAI: "forehead upper part width", default: 50 },
+              { id: "uf2", label: "Voltar / Frente", labelAI: "forehead upper part depth", default: 50 },
+              { id: "uf3", label: "Neutro / Cima", labelAI: "forehead upper part height", default: 50 },
+              { id: "uf4", label: "Redondo / Anguloso", labelAI: "forehead upper part angularity", default: 50 },
+              { id: "uf5", label: "Mover Esq. / Dir.", labelAI: "forehead upper part horizontal asymmetry", default: 50 }
+            ]
+          }
+        ]
       },
       {
-        id: "posicionamento",
-        label: "Posicionamento",
+        id: "lower-forehead",
+        label: "Parte inferior da testa",
         groups: [
           {
-            id: "espacamento",
-            label: "Espaçamento",
+            id: "lower-forehead-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
             sliders: [
-              { id: "o8", label: "Distância", value: 50 },
-              { id: "o9", label: "Altura", value: 53 },
-            ],
-          },
-        ],
-      },
+              { id: "lf1", label: "Fino / Ampliar", labelAI: "forehead lower part width", default: 50 },
+              { id: "lf2", label: "Baixo / Cima", labelAI: "forehead lower part height", default: 50 },
+              { id: "lf3", label: "Voltar / Frente", labelAI: "forehead lower part depth", default: 50 },
+              { id: "lf4", label: "Redondo / Anguloso", labelAI: "forehead lower part angularity", default: 50 }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+
+  // ==========================================
+  // 3. SOBRANCELHAS
+  // ==========================================
+  {
+    id: "eyebrows",
+    label: "Sobrancelhas",
+    subTabs: [
       {
-        id: "sobrancelhas",
+        id: "eyebrows-main",
         label: "Sobrancelhas",
         groups: [
           {
-            id: "forma-sobrancelha",
-            label: "Forma",
+            id: "eyebrows-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
             sliders: [
-              { id: "o10", label: "Espessura", value: 41 },
-              { id: "o11", label: "Arco", value: 57 },
-              { id: "o12", label: "Comprimento", value: 64 },
-            ],
-          },
-        ],
+              { id: "eb1", label: "Fino / Ampliar", labelAI: "eyebrows thickness", default: 50 },
+              { id: "eb2", label: "Baixo / Cima", labelAI: "eyebrows height", default: 50 },
+              { id: "eb3", label: "Voltar / Frente", labelAI: "eyebrows depth", default: 50 },
+              { id: "eb4", label: "Redondo / Anguloso", labelAI: "eyebrows angularity", default: 50 }
+            ]
+          }
+        ]
       },
-    ],
+      {
+        id: "eyebrows-center",
+        label: "Centro das sobrancelhas",
+        groups: [
+          {
+            id: "eyebrows-center-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
+            sliders: [
+              { id: "ebc1", label: "Fino / Ampliar", labelAI: "eyebrows center width", default: 50 },
+              { id: "ebc2", label: "Baixo / Cima", labelAI: "eyebrows center height", default: 50 },
+              { id: "ebc3", label: "Voltar / Frente", labelAI: "eyebrows center depth", default: 50 },
+              { id: "ebc4", label: "Redondo / Anguloso", labelAI: "eyebrows center angularity", default: 50 },
+              { id: "ebc5", label: "Mover Esq. / Dir.", labelAI: "eyebrows center horizontal asymmetry", default: 50 }
+            ]
+          }
+        ]
+      },
+      {
+        id: "eyebrows-outer-upper",
+        label: "Parte externa sup. da sobrancelha",
+        groups: [
+          {
+            id: "eyebrows-outer-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
+            sliders: [
+              { id: "ebo1", label: "Fino / Ampliar", labelAI: "outer eyebrows thickness", default: 50 },
+              { id: "ebo2", label: "Baixo / Cima", labelAI: "outer eyebrows height", default: 50 },
+              { id: "ebo3", label: "Voltar / Frente", labelAI: "outer eyebrows depth", default: 50 },
+              { id: "ebo4", label: "Redondo / Anguloso", labelAI: "outer eyebrows angularity", default: 50 }
+            ]
+          }
+        ]
+      }
+    ]
   },
+
+  // ==========================================
+  // 4. OLHOS
+  // ==========================================
   {
-    id: "nariz",
+    id: "eyes",
+    label: "Olhos",
+    subTabs: [
+      {
+        id: "eyes-main",
+        label: "Olhos",
+        groups: [
+          {
+            id: "eyes-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
+            sliders: [
+              { id: "e1", label: "Fino / Ampliar", labelAI: "eyes width or distance", default: 50 },
+              { id: "e2", label: "Baixo / Cima", labelAI: "eyes height", default: 50 },
+              { id: "e3", label: "Voltar / Frente", labelAI: "eyes depth", default: 50 },
+              { id: "e4", label: "Maior / Menor", labelAI: "eyes size", default: 50 }
+            ]
+          }
+        ]
+      },
+      {
+        id: "eye-sockets",
+        label: "Órbitas",
+        groups: [
+          {
+            id: "eye-sockets-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
+            sliders: [
+              { id: "os1", label: "Fino / Ampliar", labelAI: "eye sockets width", default: 50 },
+              { id: "os2", label: "Baixo / Cima", labelAI: "eye sockets height", default: 50 },
+              { id: "os3", label: "Voltar / Frente", labelAI: "eye sockets depth", default: 50 },
+              { id: "os4", label: "Maior / Menor", labelAI: "eye sockets size", default: 50 }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+
+  // ==========================================
+  // 5. ORELHAS
+  // ==========================================
+  {
+    id: "ears",
+    label: "Orelhas",
+    subTabs: [
+      {
+        id: "ears-main",
+        label: "Orelhas",
+        groups: [
+          {
+            id: "ears-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
+            sliders: [
+              { id: "er1", label: "Fino / Ampliar", labelAI: "ears flare or width", default: 50 },
+              { id: "er2", label: "Baixo / Cima", labelAI: "ears height", default: 50 },
+              { id: "er3", label: "Voltar / Frente", labelAI: "ears depth", default: 50 },
+              { id: "er4", label: "Maior / Menor", labelAI: "ears size", default: 50 },
+              { id: "er5", label: "Mover Esq. / Dir.", labelAI: "ears horizontal asymmetry", default: 50 }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+
+  // ==========================================
+  // 6. NARIZ
+  // ==========================================
+  {
+    id: "nose",
     label: "Nariz",
     subTabs: [
       {
-        id: "formato",
-        label: "Formato",
+        id: "nose-main",
+        label: "Nariz",
         groups: [
           {
-            id: "ponte",
-            label: "Ponte Nasal",
+            id: "nose-adjustments",
+            label: "Ajustes de Proporção",
             defaultOpen: true,
             sliders: [
-              { id: "n1", label: "Altura", value: 52 },
-              { id: "n2", label: "Largura", value: 38 },
-              { id: "n3", label: "Curvatura", value: 45 },
-              { id: "n4", label: "Projeção", value: 60, done: true },
-            ],
-          },
-          {
-            id: "ponta",
-            label: "Ponta do Nariz",
-            sliders: [
-              { id: "n5", label: "Tamanho", value: 47 },
-              { id: "n6", label: "Inclinação", value: 51 },
-              { id: "n7", label: "Definição", value: 39 },
-            ],
-          },
-        ],
+              { id: "n1", label: "Fino / Ampliar", labelAI: "nose width", default: 50 },
+              { id: "n2", label: "Baixo / Cima", labelAI: "nose height", default: 50 },
+              { id: "n3", label: "Voltar / Frente", labelAI: "nose depth", default: 50 },
+              { id: "n4", label: "Redondo / Anguloso", labelAI: "nose angularity", default: 50 },
+              { id: "n5", label: "Mover Esq. / Dir.", labelAI: "nose horizontal asymmetry", default: 50 }
+            ]
+          }
+        ]
       },
       {
-        id: "esqueleto",
-        label: "Esqueleto",
+        id: "nose-bridge-sides",
+        label: "Laterais do dorso nasal",
         groups: [
           {
-            id: "narinas",
-            label: "Narinas",
+            id: "nose-bridge-sides-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
             sliders: [
-              { id: "n8", label: "Largura", value: 43 },
-              { id: "n9", label: "Abertura", value: 36 },
-            ],
-          },
-        ],
+              { id: "nbs1", label: "Fino / Ampliar", labelAI: "sides of nasal bridge width", default: 50 },
+              { id: "nbs2", label: "Baixo / Cima", labelAI: "sides of nasal bridge height", default: 50 },
+              { id: "nbs3", label: "Voltar / Frente", labelAI: "sides of nasal bridge depth", default: 50 },
+              { id: "nbs4", label: "Redondo / Anguloso", labelAI: "sides of nasal bridge angularity", default: 50 }
+            ]
+          }
+        ]
       },
-    ],
+      {
+        id: "nose-bridge-center",
+        label: "Centro do dorso nasal",
+        groups: [
+          {
+            id: "nose-bridge-center-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
+            sliders: [
+              { id: "nbc1", label: "Fino / Ampliar", labelAI: "center of nasal bridge width", default: 50 },
+              { id: "nbc2", label: "Baixo / Cima", labelAI: "center of nasal bridge height", default: 50 },
+              { id: "nbc3", label: "Voltar / Frente", labelAI: "center of nasal bridge depth", default: 50 },
+              { id: "nbc4", label: "Redondo / Anguloso", labelAI: "center of nasal bridge angularity", default: 50 },
+              { id: "nbc5", label: "Mover Esq. / Dir.", labelAI: "center of nasal bridge horizontal asymmetry", default: 50 }
+            ]
+          }
+        ]
+      },
+      {
+        id: "nose-bridge-upper",
+        label: "Parte superior do dorso nasal",
+        groups: [
+          {
+            id: "nose-bridge-upper-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
+            sliders: [
+              { id: "nbu1", label: "Fino / Ampliar", labelAI: "upper nasal bridge width", default: 50 },
+              { id: "nbu2", label: "Baixo / Cima", labelAI: "upper nasal bridge height", default: 50 },
+              { id: "nbu3", label: "Voltar / Frente", labelAI: "upper nasal bridge depth", default: 50 },
+              { id: "nbu4", label: "Redondo / Anguloso", labelAI: "upper nasal bridge angularity", default: 50 },
+              { id: "nbu5", label: "Mover Esq. / Dir.", labelAI: "upper nasal bridge horizontal asymmetry", default: 50 }
+            ]
+          }
+        ]
+      }
+    ]
   },
+
+  // ==========================================
+  // 7. BOCHECHAS
+  // ==========================================
   {
-    id: "boca",
+    id: "cheeks",
+    label: "Bochechas",
+    subTabs: [
+      {
+        id: "cheeks-main",
+        label: "Bochechas",
+        groups: [
+          {
+            id: "cheeks-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
+            sliders: [
+              { id: "ch1", label: "Fino / Ampliar", labelAI: "cheeks width or fullness", default: 50 },
+              { id: "ch2", label: "Baixo / Cima", labelAI: "cheeks height", default: 50 },
+              { id: "ch3", label: "Voltar / Frente", labelAI: "cheeks depth or protrusion", default: 50 },
+              { id: "ch4", label: "Redondo / Anguloso", labelAI: "cheeks angularity", default: 50 }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+
+  // ==========================================
+  // 8. BOCA
+  // ==========================================
+  {
+    id: "mouth",
     label: "Boca",
     subTabs: [
       {
-        id: "formato",
-        label: "Formato",
+        id: "mouth-main",
+        label: "Boca",
         groups: [
           {
-            id: "labio-superior",
-            label: "Lábio Superior",
+            id: "mouth-adjustments",
+            label: "Ajustes de Proporção",
             defaultOpen: true,
             sliders: [
-              { id: "b1", label: "Espessura", value: 54 },
-              { id: "b2", label: "Largura", value: 61 },
-              { id: "b3", label: "Curvatura", value: 47 },
-              { id: "b4", label: "Profundidade", value: 39 },
-              { id: "b5", label: "Projeção", value: 58, done: true },
-            ],
-          },
-          {
-            id: "labio-inferior",
-            label: "Lábio Inferior",
-            sliders: [
-              { id: "b6", label: "Espessura", value: 49 },
-              { id: "b7", label: "Largura", value: 56 },
-              { id: "b8", label: "Projeção", value: 44 },
-            ],
-          },
-          {
-            id: "cantos-da-boca",
-            label: "Cantos da Boca",
-            sliders: [
-              { id: "b9", label: "Altura", value: 52 },
-              { id: "b10", label: "Tensão", value: 35 },
-            ],
-          },
-        ],
+              { id: "m1", label: "Fino / Ampliar", labelAI: "mouth width", default: 50 },
+              { id: "m2", label: "Baixo / Cima", labelAI: "mouth height", default: 50 },
+              { id: "m3", label: "Voltar / Frente", labelAI: "mouth depth or protrusion", default: 50 },
+              { id: "m4", label: "Redondo / Anguloso", labelAI: "mouth angularity", default: 50 },
+              { id: "m5", label: "Mover Esq. / Dir.", labelAI: "mouth horizontal asymmetry", default: 50 }
+            ]
+          }
+        ]
       },
       {
-        id: "pele",
-        label: "Pele",
+        id: "mouth-outer-upper",
+        label: "Parte superior externa da boca",
         groups: [
           {
-            id: "tom-labios",
-            label: "Tom dos Lábios",
+            id: "mouth-outer-upper-adjustments",
+            label: "Ajustes de Proporção",
             defaultOpen: true,
             sliders: [
-              { id: "b11", label: "Saturação", value: 48 },
-              { id: "b12", label: "Brilho", value: 41 },
-              { id: "b13", label: "Hidratação", value: 66 },
-              { id: "b14", label: "Contorno", value: 53 },
-            ],
-          },
-        ],
-      },
-      {
-        id: "posicionamento",
-        label: "Posicionamento",
-        groups: [
-          {
-            id: "altura-boca",
-            label: "Altura & Distância",
-            sliders: [
-              { id: "b15", label: "Altura", value: 50 },
-              { id: "b16", label: "Distância do Nariz", value: 57 },
-            ],
-          },
-        ],
-      },
-    ],
+              { id: "mou1", label: "Fino / Ampliar", labelAI: "outer upper mouth width", default: 50 },
+              { id: "mou2", label: "Baixo / Cima", labelAI: "outer upper mouth height", default: 50 },
+              { id: "mou3", label: "Voltar / Frente", labelAI: "outer upper mouth depth", default: 50 },
+              { id: "mou4", label: "Redondo / Anguloso", labelAI: "outer upper mouth angularity", default: 50 }
+            ]
+          }
+        ]
+      }
+    ]
   },
+
+  // ==========================================
+  // 9. QUEIXO
+  // ==========================================
   {
-    id: "queixo",
+    id: "chin",
     label: "Queixo",
     subTabs: [
       {
-        id: "formato",
-        label: "Formato",
+        id: "chin-main",
+        label: "Queixo",
         groups: [
           {
-            id: "estrutura-queixo",
-            label: "Estrutura do Queixo",
+            id: "chin-adjustments",
+            label: "Ajustes de Proporção",
             defaultOpen: true,
             sliders: [
-              { id: "q1", label: "Largura", value: 55 },
-              { id: "q2", label: "Altura", value: 48 },
-              { id: "q3", label: "Projeção", value: 62, done: true },
-              { id: "q4", label: "Definição", value: 51 },
-            ],
-          },
-          {
-            id: "mandibula",
-            label: "Mandíbula",
-            sliders: [
-              { id: "q5", label: "Largura", value: 59 },
-              { id: "q6", label: "Ângulo", value: 46 },
-              { id: "q7", label: "Comprimento", value: 53 },
-            ],
-          },
-        ],
+              { id: "q1", label: "Fino / Ampliar", labelAI: "chin width", default: 50 },
+              { id: "q2", label: "Baixo / Cima", labelAI: "chin height", default: 50 },
+              { id: "q3", label: "Voltar / Frente", labelAI: "chin depth or protrusion", default: 50 },
+              { id: "q4", label: "Redondo / Anguloso", labelAI: "chin angularity", default: 50 },
+              { id: "q5", label: "Mover Esq. / Dir.", labelAI: "chin horizontal asymmetry", default: 50 }
+            ]
+          }
+        ]
       },
       {
-        id: "esqueleto",
-        label: "Esqueleto",
+        id: "chin-upper",
+        label: "Parte superior do queixo",
         groups: [
           {
-            id: "osso-mandibular",
-            label: "Osso Mandibular",
+            id: "chin-upper-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
             sliders: [
-              { id: "q8", label: "Densidade", value: 42 },
-              { id: "q9", label: "Projeção Lateral", value: 37 },
-            ],
-          },
-        ],
-      },
-    ],
+              { id: "qu1", label: "Fino / Ampliar", labelAI: "upper chin width", default: 50 },
+              { id: "qu2", label: "Baixo / Cima", labelAI: "upper chin height", default: 50 },
+              { id: "qu3", label: "Voltar / Frente", labelAI: "upper chin depth or protrusion", default: 50 },
+              { id: "qu4", label: "Redondo / Anguloso", labelAI: "upper chin angularity", default: 50 },
+              { id: "qu5", label: "Mover Esq. / Dir.", labelAI: "upper chin horizontal asymmetry", default: 50 }
+            ]
+          }
+        ]
+      }
+    ]
   },
+
+  // ==========================================
+  // 10. MAXILAR
+  // ==========================================
   {
-    id: "avancado",
-    label: "Avançado",
+    id: "jaw",
+    label: "Maxilar",
     subTabs: [
       {
-        id: "esqueleto",
-        label: "Esqueleto",
+        id: "jaw-main",
+        label: "Maxilar",
         groups: [
           {
-            id: "proporcoes-globais",
-            label: "Proporções Globais",
+            id: "jaw-adjustments",
+            label: "Ajustes de Proporção",
             defaultOpen: true,
             sliders: [
-              { id: "a1", label: "Simetria", value: 88 },
-              { id: "a2", label: "Densidade Óssea", value: 54 },
-              { id: "a3", label: "Volume Facial", value: 47 },
-              { id: "a4", label: "Idade Aparente", value: 35 },
-              { id: "a5", label: "Massa Muscular", value: 61 },
-            ],
-          },
-        ],
+              { id: "j1", label: "Fino / Ampliar", labelAI: "jaw width", default: 50 },
+              { id: "j2", label: "Baixo / Cima", labelAI: "jaw height", default: 50 },
+              { id: "j3", label: "Voltar / Frente", labelAI: "jaw depth or protrusion", default: 50 },
+              { id: "j4", label: "Redondo / Anguloso", labelAI: "jaw angularity", default: 50 }
+            ]
+          }
+        ]
       },
       {
-        id: "pele",
-        label: "Pele",
+        id: "jaw-inner-upper",
+        label: "Parte superior interna do maxilar",
         groups: [
           {
-            id: "detalhes-pele",
-            label: "Detalhes da Pele",
+            id: "jaw-inner-upper-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
             sliders: [
-              { id: "a6", label: "Sardas", value: 12 },
-              { id: "a7", label: "Cicatrizes", value: 0 },
-              { id: "a8", label: "Rugas", value: 18 },
-              { id: "a9", label: "Oleosidade", value: 33 },
-            ],
-          },
-        ],
+              { id: "jiu1", label: "Fino / Ampliar", labelAI: "inner upper jaw width", default: 50 },
+              { id: "jiu2", label: "Baixo / Cima", labelAI: "inner upper jaw height", default: 50 },
+              { id: "jiu3", label: "Voltar / Frente", labelAI: "inner upper jaw depth", default: 50 },
+              { id: "jiu4", label: "Redondo / Anguloso", labelAI: "inner upper jaw angularity", default: 50 }
+            ]
+          }
+        ]
       },
       {
-        id: "posicionamento",
-        label: "Posicionamento",
+        id: "jaw-inner-lower",
+        label: "Parte inferior interna do maxilar",
         groups: [
           {
-            id: "ajuste-fino",
-            label: "Ajuste Fino",
+            id: "jaw-inner-lower-adjustments",
+            label: "Ajustes de Proporção",
+            defaultOpen: true,
             sliders: [
-              { id: "a10", label: "Offset Horizontal", value: 50 },
-              { id: "a11", label: "Offset Vertical", value: 50 },
-              { id: "a12", label: "Rotação Global", value: 50 },
-            ],
-          },
-        ],
-      },
-    ],
-  },
-]
+              { id: "jil1", label: "Fino / Ampliar", labelAI: "inner lower jaw width", default: 50 },
+              { id: "jil2", label: "Baixo / Cima", labelAI: "inner lower jaw height", default: 50 },
+              { id: "jil3", label: "Voltar / Frente", labelAI: "inner lower jaw depth", default: 50 },
+              { id: "jil4", label: "Redondo / Anguloso", labelAI: "inner lower jaw angularity", default: 50 }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+];

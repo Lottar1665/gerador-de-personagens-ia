@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { cn } from "@/lib/utils"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Slider } from "@/components/ui/slider"
 
 interface ParameterRowProps {
@@ -50,20 +49,7 @@ export function ParameterRow({ slider, overrideValue }: ParameterRowProps) {
         </div>
       </div>
 
-      {/* LADO DIREITO: Botão de Checkbox "Concluído" */}
-      <label
-        className={cn(
-          "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground transition-all select-none",
-          done ? "border-primary/40 bg-primary/10 text-primary" : "bg-secondary/20 hover:border-border/80 hover:text-foreground",
-        )}
-      >
-        <Checkbox
-          checked={done}
-          onCheckedChange={(v) => setDone(v === true)}
-          className="size-3.5 border-muted-foreground/40 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-        />
-        <span className="hidden sm:inline">Concluído</span>
-      </label>
+      
 
     </div>
   )
