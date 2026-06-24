@@ -127,6 +127,10 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
   }
 
   const handleGerarParametros = async () => {
+    if (isLoading) {
+      return
+    }
+
     if (!imagemSelecionada) {
       alert("Por favor, anexe uma foto antes de gerar os parâmetros.")
       return
