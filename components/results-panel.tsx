@@ -1,65 +1,86 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { faceParameters } from "@/lib/face-parameters" // Confirme se o caminho da sua pasta lib está correto
-import { ChevronDown, ChevronUp } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Slider } from "@/components/ui/slider"
+import { useEffect, useMemo, useState } from "react"
+import { ChevronLeft, ChevronRight, Layers } from "lucide-react"
+
+import { Badge } from "@/components/ui/badge"
+import { ParameterRow } from "@/components/parameter-row"
+import { faceParameters, type AccordionGroup, type SubTab } from "@/lib/face-parameters"
+
+function Stepper({
+  label,
+  onPrev,
+  onNext,
+  indented,
+}: {
+  label: string
+  onPrev: () => void
+  onNext: () => void
+  indented?: boolean
+}) {
+  return (
+    <div className={indented ? "relative pl-5" : undefined}>
+      {indented && (
+        <span
+          aria-hidden
+          className="absolute top-1/2 left-0 size-3 -translate-y-1/2 rounded-bl-md border-b border-l border-border"
+        />
+      )}
+      <div className="flex items-center justify-between rounded-lg border border-border bg-secondary/60 px-1.5 py-1.5">
+        <button
+          type="button"
+          onClick={onPrev}
+          aria-label="Anterior"
+          className="flex size-7 items-center justify-center rounded-md text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground"
+        >
+          <ChevronLeft className="size-4" />
+        </button>
+        <span className="truncate px-2 text-center text-sm font-semibold text-foreground">
+          {label}
+        </span>
+        <button
+          type="button"
+          onClick={onNext}
+          aria-label="Próximo"
+          className="flex size-7 items-center justify-center rounded-md text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground"
+        >
+          <ChevronRight className="size-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+type AreaOption = {
+  subTab: SubTab
+  group: AccordionGroup
+}
 
 export function ResultsPanel({ data }: { data: any }) {
+  const [tabIndex, setTabIndex] = useState(0)
+  const [areaIndex, setAreaIndex] = useState(0)
 
-  console.log("DADOS RECEBIDOS NA RESULTS PANEL:", JSON.stringify(data, null, 2));
+  const tab = faceParameters[tabIndex]
 
-  // Controle de Navegação (Menu Superior)
-  const [activeTabId, setActiveTabId] = useState(faceParameters[0].id)
-  
-  // Encontra a aba principal ativa no momento
-  const activeTab = faceParameters.find((t) => t.id === activeTabId) || faceParameters[0]
+  const areaOptions = useMemo<AreaOption[]>(
+    () => tab.subTabs.flatMap((subTab) => subTab.groups.map((group) => ({ subTab, group }))),
+    [tab],
+  )
 
-  // Controle da Sub-aba
-  const [activeSubTabId, setActiveSubTabId] = useState(activeTab.subTabs[0].id)
-  
-  // Sempre que o usuário trocar a Aba Principal, volta para a primeira Sub-aba dela
+  const area = areaOptions[Math.min(areaIndex, areaOptions.length - 1)]
+
   useEffect(() => {
-    const tab = faceParameters.find((t) => t.id === activeTabId)
-    if (tab && tab.subTabs.length > 0) {
-      setActiveSubTabId(tab.subTabs[0].id)
-    }
-  }, [activeTabId])
+    setAreaIndex(0)
+  }, [tabIndex])
 
-  const activeSubTab = activeTab.subTabs.find((st) => st.id === activeSubTabId) || activeTab.subTabs[0]
-
-  const currentTabIndex = faceParameters.findIndex((t) => t.id === activeTabId)
-  const currentSubTabIndex = activeTab.subTabs.findIndex((st) => st.id === activeSubTabId)
-
-  const changeTabBy = (delta: number) => {
-    const nextIndex = (currentTabIndex + delta + faceParameters.length) % faceParameters.length
-    setActiveTabId(faceParameters[nextIndex].id)
+  const cycleTab = (dir: 1 | -1) => {
+    setTabIndex((current) => (current + dir + faceParameters.length) % faceParameters.length)
   }
 
-  const changeSubTabBy = (delta: number) => {
-    const subTabs = activeTab.subTabs
-    const nextIndex = (currentSubTabIndex + delta + subTabs.length) % subTabs.length
-    setActiveSubTabId(subTabs[nextIndex].id)
+  const cycleArea = (dir: 1 | -1) => {
+    setAreaIndex((current) => (current + dir + areaOptions.length) % areaOptions.length)
   }
 
-  // Controle dos Accordions (Grupos de sliders expandidos)
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
-
-  // Inicia os grupos abertos por padrão
-  useEffect(() => {
-    const initialOpenState: Record<string, boolean> = {}
-    activeSubTab?.groups.forEach((g) => {
-      initialOpenState[g.id] = g.defaultOpen ?? true
-    })
-    setOpenGroups(initialOpenState)
-  }, [activeSubTab])
-
-  const toggleGroup = (groupId: string) => {
-    setOpenGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }))
-  }
-
-  // Estado Vazio (Antes da IA rodar)
   if (!data) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-8 text-center text-muted-foreground bg-secondary/10 rounded-xl border border-dashed border-border/50">
@@ -67,230 +88,67 @@ export function ResultsPanel({ data }: { data: any }) {
           <span className="text-2xl">📊</span>
         </div>
         <h3 className="text-lg font-semibold text-foreground mb-2">Aguardando Análise</h3>
-        <p className="text-sm max-w-[250px]">
+        <p className="text-sm max-w-[260px]">
           Faça o upload de uma foto e clique em gerar para ver os parâmetros do EA FC 26.
         </p>
       </div>
     )
   }
 
+  const activeArea = area ?? {
+    subTab: tab.subTabs[0],
+    group: tab.subTabs[0]?.groups[0] ?? { id: "", label: "", sliders: [] },
+  }
+
+  const areaLabel = `${activeArea.subTab.label} · ${activeArea.group.label}`
+
   return (
-    <div className="flex h-full overflow-hidden rounded-xl border border-border bg-background">
-      <aside className="hidden w-[320px] shrink-0 flex-col gap-4 border-r border-border/70 bg-secondary/10 px-4 py-5 lg:flex">
-        <div className="rounded-[28px] border border-border/70 bg-background p-4 shadow-sm">
-          <p className="text-[11px] uppercase tracking-[0.26em] text-muted-foreground mb-4">Classe</p>
-          <div className="flex items-center justify-between gap-3 rounded-3xl border border-border/70 bg-secondary/80 px-4 py-3">
-            <div>
-              <p className="text-sm font-semibold text-foreground">{activeTab.label}</p>
-              <p className="text-xs text-muted-foreground">{activeTab.subTabs.length} subclasses</p>
-            </div>
-            <div className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-              {currentTabIndex + 1}/{faceParameters.length}
-            </div>
+    <div className="flex h-full flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Layers className="size-4 text-primary" />
+          <div>
+            <p className="text-sm font-semibold">Parâmetros gerados</p>
+            <p className="text-xs text-muted-foreground">Painel EA FC</p>
           </div>
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={() => changeTabBy(-1)}
-              className="grid h-11 w-11 place-items-center rounded-2xl border border-border/70 bg-background text-foreground transition hover:border-primary hover:text-primary"
-              aria-label="Classe anterior"
-            >
-              <ChevronDown className="size-4 rotate-90" />
-            </button>
-            <button
-              type="button"
-              onClick={() => changeTabBy(1)}
-              className="grid h-11 w-11 place-items-center rounded-2xl border border-border/70 bg-background text-foreground transition hover:border-primary hover:text-primary"
-              aria-label="Próxima classe"
-            >
-              <ChevronDown className="size-4 -rotate-90" />
-            </button>
+        </div>
+        <Badge className="bg-primary/15 text-primary">IA pronta</Badge>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col gap-3 rounded-2xl border border-border bg-card/80 p-3">
+        <Stepper
+          label={`${tab.label} (${tabIndex + 1}/${faceParameters.length})`}
+          onPrev={() => cycleTab(-1)}
+          onNext={() => cycleTab(1)}
+        />
+
+        <Stepper
+          label={`${areaLabel} (${areaIndex + 1}/${areaOptions.length})`}
+          onPrev={() => cycleArea(-1)}
+          onNext={() => cycleArea(1)}
+          indented
+        />
+
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-rounded scrollbar-track-transparent scrollbar-thumb-slate-700/40">
+          <div className="space-y-4 py-2">
+            {activeArea.group.sliders.map((slider) => {
+              const rawValue = data?.[tab.label]?.[activeArea.subTab.label]?.[activeArea.group.label]?.[slider.label]
+              const sliderValue = typeof rawValue === "number" ? rawValue : Number(rawValue ?? slider.default)
+
+              return (
+                <ParameterRow
+                  key={slider.id}
+                  slider={{ ...slider, defaultValue: slider.default }}
+                  overrideValue={sliderValue}
+                />
+              )
+            })}
           </div>
         </div>
 
-        <div className="rounded-[28px] border border-border/70 bg-background p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Subclasse</p>
-              <p className="text-sm font-semibold text-foreground">{activeSubTab.label}</p>
-            </div>
-            <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-              {currentSubTabIndex + 1}/{activeTab.subTabs.length}
-            </span>
-          </div>
-          <div className="space-y-2">
-            {activeTab.subTabs.map((sub) => (
-              <button
-                key={sub.id}
-                onClick={() => setActiveSubTabId(sub.id)}
-                className={cn(
-                  "flex w-full items-center justify-between rounded-3xl border px-3 py-3 text-left text-sm font-medium transition",
-                  activeSubTabId === sub.id
-                    ? "border-primary bg-primary/10 text-foreground"
-                    : "border-border/60 bg-secondary/80 text-muted-foreground hover:border-primary hover:bg-secondary"
-                )}
-              >
-                <span>{sub.label}</span>
-                <span className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Sub</span>
-              </button>
-            ))}
-          </div>
-          <div className="mt-4 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => changeSubTabBy(-1)}
-              className="grid h-11 w-11 place-items-center rounded-2xl border border-border/70 bg-background text-foreground transition hover:border-primary hover:text-primary"
-              aria-label="Subclasse anterior"
-            >
-              <ChevronDown className="size-5 rotate-90" />
-            </button>
-            <button
-              type="button"
-              onClick={() => changeSubTabBy(1)}
-              className="grid h-11 w-11 place-items-center rounded-2xl border border-border/70 bg-background text-foreground transition hover:border-primary hover:text-primary"
-              aria-label="Próxima subclasse"
-            >
-              <ChevronDown className="size-5 -rotate-90" />
-            </button>
-          </div>
-        </div>
-
-        <div className="rounded-[28px] border border-border/70 bg-background p-4 shadow-sm">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-3">Parâmetros</p>
-          <div className="grid gap-2">
-            {activeSubTab.groups.flatMap((group) => group.sliders).map((slider) => (
-              <span
-                key={slider.id}
-                className="inline-flex items-center rounded-full bg-secondary/80 px-3 py-2 text-xs font-semibold text-muted-foreground"
-              >
-                {slider.label}
-              </span>
-            ))}
-          </div>
-        </div>
-      </aside>
-
-      <div className="flex-1 overflow-y-auto p-4 lg:p-6 bg-[#0b1724]">
-        {/* Header com título + badge */}
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="rounded-full bg-[#102233] p-2 text-xl">📦</div>
-            <div>
-              <p className="text-sm font-semibold text-white">Parâmetros gerados</p>
-            </div>
-          </div>
-          <div className="rounded-full bg-emerald-400/90 px-3 py-1 text-xs font-semibold text-black">IA pronta</div>
-        </div>
-
-        {/* Pills de Classe e Subclasse — estilo do screenshot */}
-        <div className="space-y-3 mb-4">
-          <div className="relative">
-            <button
-              onClick={() => changeTabBy(-1)}
-              className="absolute left-2 top-1/2 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full bg-transparent border border-transparent text-white/80"
-              aria-label="Classe anterior"
-            >
-              <ChevronDown className="size-4 rotate-90" />
-            </button>
-            <div className="flex items-center justify-center rounded-xl border border-[#28404f] bg-[#0f2533] py-3 px-4 text-center text-sm font-semibold text-white">
-              {activeTab.label}
-            </div>
-            <button
-              onClick={() => changeTabBy(1)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full bg-transparent border border-transparent text-white/80"
-              aria-label="Próxima classe"
-            >
-              <ChevronDown className="size-4 -rotate-90" />
-            </button>
-          </div>
-
-          <div className="relative">
-            <button
-              onClick={() => changeSubTabBy(-1)}
-              className="absolute left-2 top-1/2 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full bg-transparent border border-transparent text-white/80"
-              aria-label="Subclasse anterior"
-            >
-              <ChevronDown className="size-4 rotate-90" />
-            </button>
-            <div className="flex items-center justify-center rounded-xl border border-[#28404f] bg-[#0f2533] py-3 px-4 text-center text-sm font-semibold text-white">
-              {activeSubTab.label}
-            </div>
-            <button
-              onClick={() => changeSubTabBy(1)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full bg-transparent border border-transparent text-white/80"
-              aria-label="Próxima subclasse"
-            >
-              <ChevronDown className="size-4 -rotate-90" />
-            </button>
-          </div>
-        </div>
-
-        <div className="grid gap-4">
-          {activeSubTab?.groups.map((group) => {
-            const isOpen = openGroups[group.id]
-
-            return (
-              <div key={group.id} className="overflow-hidden rounded-[20px] border border-[#253241] bg-[#07101a] p-4">
-                <button
-                  onClick={() => toggleGroup(group.id)}
-                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="h-3.5 w-3.5 rounded-full bg-emerald-400/80" />
-                    <div>
-                      <p className="text-sm font-semibold text-white">{group.label}</p>
-                      <p className="text-xs text-white/70">{group.sliders.length} ajustes</p>
-                    </div>
-                  </div>
-                  {isOpen ? <ChevronUp className="size-5 text-white/70" /> : <ChevronDown className="size-5 text-white/70" />}
-                </button>
-
-                {isOpen && (
-                  <div className="space-y-6 border-t border-[#20313d] px-2 pt-4 pb-2">
-                    {group.sliders.map((slider) => {
-                      const valorDaIA =
-                        data?.[activeTab.label]?.[activeSubTab.label]?.[group.label]?.[slider.label] ??
-                        slider.default
-
-                      if (data && data?.[activeTab.label]?.[activeSubTab.label]?.[group.label]?.[slider.label] === undefined) {
-                        console.warn(`Não achei: ${activeTab.label} -> ${activeSubTab.label} -> ${group.label} -> ${slider.label}`)
-                      }
-
-                      const parts = slider.label.split('/')
-                      const left = parts[0] ? parts[0].trim() : slider.label
-                      const right = parts[1] ? parts[1].trim() : ''
-
-                      return (
-                        <div key={slider.id} className="space-y-3">
-                          <div className="flex items-center justify-between text-sm text-white/90">
-                            <span className="truncate">{left}</span>
-                            <div className="flex items-center gap-4">
-                              <span className="text-sm text-white/70">{right}</span>
-                              <span className="text-lg font-bold text-white">{valorDaIA}</span>
-                            </div>
-                          </div>
-
-                          <div className="px-2">
-                            <Slider
-                              value={[valorDaIA]}
-                              max={100}
-                              step={1}
-                              className="w-full [&>span[data-slot='slider-track']]:bg-[#20313d] [&>span[data-slot='slider-range']]:bg-emerald-400"
-                            />
-                          </div>
-                        </div>
-                      )
-                    })}
-
-                    <div className="h-8" />
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-
-        <div className="mt-6 py-6 text-center text-xs text-white/60">Toque em um parâmetro para marcar como concluído</div>
+        <p className="px-1 text-center text-[11px] text-muted-foreground">
+          Toque em um parâmetro para marcar como concluído
+        </p>
       </div>
     </div>
   )
