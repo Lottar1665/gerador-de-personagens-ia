@@ -1,5 +1,13 @@
 "use client"
 
+import { useState } from "react"
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
+  FacebookAuthProvider,
+} from "firebase/auth"
 import { Sparkles } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -12,8 +20,13 @@ import {
 } from "@/components/ui/card"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SocialButtons } from "@/components/social-buttons"
+import { auth } from "@/lib/firebase"
+import {
+  ADMIN_EMAIL,
+  ADMIN_PASSWORD,
+  normalizeAuthEmail,
+} from "@/lib/auth"
 
 function EmailDivider() {
   return (
@@ -28,6 +41,91 @@ function EmailDivider() {
 }
 
 export function AuthScreen() {
+  const [mode, setMode] = useState<"login" | "register">("login")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+
+  const providerSignIn = async (provider: GoogleAuthProvider | FacebookAuthProvider) => {
+    if (!auth) {
+      setError("Firebase auth não está disponível no navegador.")
+      return
+    }
+
+    setError(null)
+    setIsLoading(true)
+
+    try {
+      await signInWithPopup(auth, provider)
+    } catch (popupError: any) {
+      console.error(popupError)
+      setError(
+        `Falha no login social (${popupError?.code || "erro desconhecido"}). Tente novamente.`,
+      )
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    if (!auth) {
+      setError("Firebase auth não está disponível no navegador.")
+      return
+    }
+
+    setError(null)
+    setIsLoading(true)
+
+    const normalizedEmail = normalizeAuthEmail(email)
+    const isAdminAttempt =
+      normalizedEmail === ADMIN_EMAIL && password === ADMIN_PASSWORD
+
+    try {
+      if (mode === "register") {
+        await createUserWithEmailAndPassword(auth, normalizedEmail, password)
+      } else {
+        await signInWithEmailAndPassword(auth, normalizedEmail, password)
+      }
+    } catch (loginError: any) {
+      console.error(loginError)
+
+      if (
+        mode === "login" &&
+        isAdminAttempt &&
+        ["auth/user-not-found", "auth/invalid-credential"].includes(
+          loginError?.code,
+        )
+      ) {
+        try {
+          await createUserWithEmailAndPassword(auth, normalizedEmail, password)
+          return
+        } catch (createError: any) {
+          console.error(createError)
+          setError(
+            `Não foi possível criar a conta de admin: ${createError?.code || createError?.message || "erro desconhecido"}`,
+          )
+          return
+        }
+      }
+
+      if (mode === "register" && loginError?.code === "auth/email-already-in-use") {
+        setError("Este e-mail já está em uso. Faça login ou use outro e-mail.")
+      } else {
+        setError(
+          
+          mode === "register"
+            ? `Falha ao criar a conta (${loginError?.code || "erro desconhecido"}). Verifique os dados.`
+            : `Falha ao efetuar login (${loginError?.code || "erro desconhecido"}). Verifique o e-mail e a senha e tente novamente.`,
+        )
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] w-full items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
@@ -40,126 +138,100 @@ export function AuthScreen() {
               Crie seu char com IA
             </h1>
             <p className="mt-1 text-sm text-muted-foreground text-pretty">
-              Gere parâmetros de rosto para o EA FC em segundos.
+              Faça login para acessar sua área de usuário ou administrador.
             </p>
           </div>
         </div>
 
         <Card className="border-border bg-card shadow-xl">
-          <Tabs defaultValue="login" className="gap-0">
-            <CardHeader className="pb-4">
-              <TabsList className="w-full bg-secondary/60">
-                <TabsTrigger value="login">Entrar</TabsTrigger>
-                <TabsTrigger value="signup">Cadastrar</TabsTrigger>
-              </TabsList>
-            </CardHeader>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg">{mode === "login" ? "Entrar" : "Criar conta"}</CardTitle>
+            <CardDescription>
+              Use sua conta do Firebase. Conta de admin: <strong>admin</strong> / <strong>12345678</strong>.
+            </CardDescription>
+          </CardHeader>
 
-            <CardContent>
-              {/* LOGIN */}
-              <TabsContent value="login">
-                <div className="flex flex-col gap-5">
-                  <div className="flex flex-col gap-1">
-                    <CardTitle className="text-lg">Bem-vindo de volta</CardTitle>
-                    <CardDescription>
-                      Acesse sua conta para gerar e salvar seus personagens.
-                    </CardDescription>
-                  </div>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 rounded-full border border-border bg-secondary/40 p-1 text-xs text-muted-foreground">
+                <button
+                  type="button"
+                  className={
+                    "flex-1 rounded-full py-2 font-semibold transition-colors " +
+                    (mode === "login" ? "bg-background text-foreground" : "hover:bg-background/80")
+                  }
+                  onClick={() => setMode("login")}
+                >
+                  Entrar
+                </button>
+                <button
+                  type="button"
+                  className={
+                    "flex-1 rounded-full py-2 font-semibold transition-colors " +
+                    (mode === "register" ? "bg-background text-foreground" : "hover:bg-background/80")
+                  }
+                  onClick={() => setMode("register")}
+                >
+                  Cadastrar
+                </button>
+              </div>
 
-                  <SocialButtons />
-                  <EmailDivider />
+              <SocialButtons
+                onGoogle={() => providerSignIn(new GoogleAuthProvider())}
+                onFacebook={() => providerSignIn(new FacebookAuthProvider())}
+              />
+            </div>
 
-                  <FieldGroup className="gap-4">
-                    <Field>
-                      <FieldLabel htmlFor="login-email">E-mail</FieldLabel>
-                      <Input
-                        id="login-email"
-                        type="email"
-                        placeholder="voce@email.com"
-                        autoComplete="email"
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="login-password">Senha</FieldLabel>
-                      <Input
-                        id="login-password"
-                        type="password"
-                        placeholder="••••••••"
-                        autoComplete="current-password"
-                      />
-                    </Field>
-                  </FieldGroup>
+            <form className="mt-4 flex flex-col gap-5" onSubmit={handleLogin}>
+              <div className="flex flex-col gap-1">
+                <CardTitle className="text-lg">
+                  {mode === "login" ? "Bem-vindo de volta" : "Crie sua conta"}
+                </CardTitle>
+                <CardDescription>
+                  {mode === "login"
+                    ? "Acesse sua conta para gerar e salvar seus personagens."
+                    : "Cadastre-se com e-mail e senha para começar."}
+                </CardDescription>
+              </div>
 
-                  <Button size="lg" className="h-11 w-full font-semibold">
-                    Entrar
-                  </Button>
+              <EmailDivider />
+
+              <FieldGroup className="gap-4">
+                <Field>
+                  <FieldLabel htmlFor="login-email">E-mail ou usuário</FieldLabel>
+                  <Input
+                    id="login-email"
+                    type="email"
+                    placeholder="seu@email.com"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="login-password">Senha</FieldLabel>
+                  <Input
+                    id="login-password"
+                    type="password"
+                    placeholder="••••••••"
+                    autoComplete={mode === "login" ? "current-password" : "new-password"}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
+                </Field>
+              </FieldGroup>
+
+              {error ? (
+                <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {error}
                 </div>
-              </TabsContent>
+              ) : null}
 
-              {/* SIGN UP */}
-              <TabsContent value="signup">
-                <div className="flex flex-col gap-5">
-                  <div className="flex flex-col gap-1">
-                    <CardTitle className="text-lg">Criar uma conta</CardTitle>
-                    <CardDescription>
-                      Comece a criar personagens incríveis com IA.
-                    </CardDescription>
-                  </div>
-
-                  <FieldGroup className="gap-4">
-                    <Field>
-                      <FieldLabel htmlFor="signup-login">
-                        Nome de Login
-                      </FieldLabel>
-                      <Input
-                        id="signup-login"
-                        placeholder="seu_nick"
-                        autoComplete="username"
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="signup-email">E-mail</FieldLabel>
-                      <Input
-                        id="signup-email"
-                        type="email"
-                        placeholder="voce@email.com"
-                        autoComplete="email"
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="signup-birth">
-                        Data de Nascimento
-                      </FieldLabel>
-                      <Input id="signup-birth" type="date" />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="signup-password">Senha</FieldLabel>
-                      <Input
-                        id="signup-password"
-                        type="password"
-                        placeholder="••••••••"
-                        autoComplete="new-password"
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="signup-password-2">
-                        Repetir Senha
-                      </FieldLabel>
-                      <Input
-                        id="signup-password-2"
-                        type="password"
-                        placeholder="••••••••"
-                        autoComplete="new-password"
-                      />
-                    </Field>
-                  </FieldGroup>
-
-                  <Button size="lg" className="h-11 w-full font-semibold">
-                    Criar Conta
-                  </Button>
-                </div>
-              </TabsContent>
-            </CardContent>
-          </Tabs>
+              <Button size="lg" className="h-11 w-full font-semibold" type="submit" disabled={isLoading}>
+                {isLoading ? (mode === "login" ? "Entrando..." : "Criando conta...") : (mode === "login" ? "Entrar" : "Cadastrar")}
+              </Button>
+            </form>
+          </CardContent>
         </Card>
       </div>
     </div>

@@ -1,18 +1,15 @@
-import admin from "firebase-admin"
+import { initializeApp, cert, getApps } from "firebase-admin/app"
+import { getFirestore, type Firestore } from "firebase-admin/firestore"
 
-if (!admin.apps.length) {
-  const projectId = process.env.FIREBASE_PROJECT_ID
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY
+const projectId = process.env.FIREBASE_PROJECT_ID
+const clientEmail = process.env.FIREBASE_CLIENT_EMAIL
+const privateKey = process.env.FIREBASE_PRIVATE_KEY
 
-  if (!projectId || !clientEmail || !privateKey) {
-    throw new Error(
-      "Missing Firebase admin credentials. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY."
-    )
-  }
+let db: Firestore | null = null
 
-  admin.initializeApp({
-    credential: admin.credential.cert({
+if (!getApps().length && projectId && clientEmail && privateKey) {
+  initializeApp({
+    credential: cert({
       projectId,
       clientEmail,
       privateKey: privateKey.replace(/\\n/g, "\n"),
@@ -20,6 +17,8 @@ if (!admin.apps.length) {
   })
 }
 
-const db = admin.firestore()
+if (getApps().length) {
+  db = getFirestore()
+}
 
-export { admin, db }
+export { db }

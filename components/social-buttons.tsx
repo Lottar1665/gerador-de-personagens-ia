@@ -42,22 +42,32 @@ function FacebookIcon() {
   )
 }
 
+type SocialButtonsProps = {
+  onGoogle: () => void
+  onFacebook: () => void
+}
+
 const socials = [
-  { name: "Google", Icon: GoogleIcon },
-  { name: "Apple", Icon: AppleIcon },
-  { name: "Facebook", Icon: FacebookIcon },
+  { name: "Google", Icon: GoogleIcon, onKey: "google" },
+  { name: "Facebook", Icon: FacebookIcon, onKey: "facebook" },
 ]
 
-export function SocialButtons() {
+export function SocialButtons({ onGoogle, onFacebook }: SocialButtonsProps) {
+  const handlers: Record<string, () => void> = {
+    google: onGoogle,
+    facebook: onFacebook,
+  }
+
   return (
-    <div className="grid grid-cols-3 gap-2">
-      {socials.map(({ name, Icon }) => (
+    <div className="grid grid-cols-2 gap-2">
+      {socials.map(({ name, Icon, onKey }) => (
         <Button
           key={name}
           type="button"
           variant="outline"
           size="lg"
           className="h-11 border-border bg-secondary/40 hover:bg-secondary"
+          onClick={handlers[onKey]}
           aria-label={`Continuar com ${name}`}
         >
           <Icon />

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react"
 import { LogOut, Sparkles, Upload, Wand2, X } from "lucide-react"
+import type { User } from "firebase/auth"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -9,8 +10,11 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ResultsPanel } from "@/components/results-panel"
 import PresetsCarousel from "./presets-carousel"
+import CommunityGallery from "./community-gallery"
 
-function TopBar({ onLogout }: { onLogout: () => void }) {
+function TopBar({ user, onLogout }: { user: User; onLogout: () => void }) {
+  const label = user.displayName || user.email || "Usuário"
+
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 px-4">
@@ -18,14 +22,15 @@ function TopBar({ onLogout }: { onLogout: () => void }) {
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Sparkles className="size-4" />
           </span>
-          <span className="font-bold tracking-tight">
-            Crie seu char <span className="text-primary">com IA</span>
-          </span>
+          <div>
+            <p className="text-sm text-muted-foreground">Bem-vindo,</p>
+            <p className="font-bold tracking-tight">{label}</p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <Avatar className="size-8 border border-border">
             <AvatarFallback className="bg-secondary text-xs font-semibold text-foreground">
-              FC
+              {label.charAt(0).toUpperCase()}
             </AvatarFallback>
           </Avatar>
           <Button variant="outline" size="sm" onClick={onLogout}>
@@ -111,7 +116,7 @@ function UploadArea({ onFileSelect }: { onFileSelect: (file: File | null) => voi
   )
 }
 
-function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: (dados: any) => void, resultadoIA: any }) {
+function InputZone({ onParametrosGerados, resultadoIA, userEmail }: { onParametrosGerados: (dados: any) => void, resultadoIA: any, userEmail: string | null }) {
   const [isLoading, setIsLoading] = useState(false)
   const [imagemSelecionada, setImagemSelecionada] = useState<File | null>(null)
   const [imagemPreview, setImagemPreview] = useState<string | null>(null)
@@ -123,6 +128,55 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
       setImagemPreview(urlTemporaria)
     } else {
       setImagemPreview(null)
+    }
+  }
+
+  const createPreviewDataUrl = async (file: File) => {
+    return new Promise<string>((resolve, reject) => {
+      const img = new Image()
+      const objectUrl = URL.createObjectURL(file)
+
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl)
+        const maxSize = 420
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height))
+        const canvas = document.createElement("canvas")
+        canvas.width = Math.round(img.width * scale)
+        canvas.height = Math.round(img.height * scale)
+        const ctx = canvas.getContext("2d")
+
+        if (!ctx) {
+          reject(new Error("Canvas não suportado."))
+          return
+        }
+
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        resolve(canvas.toDataURL("image/jpeg", 0.75))
+      }
+
+      img.onerror = (event) => {
+        URL.revokeObjectURL(objectUrl)
+        reject(new Error("Falha ao gerar preview da imagem."))
+      }
+
+      img.src = objectUrl
+    })
+  }
+
+  const saveCommunityPost = async (previewDataUrl: string, mimeType: string, aiResult: any) => {
+    try {
+      await fetch("/api/firebase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          previewDataUrl,
+          mimeType,
+          uploadedBy: userEmail || "anônimo",
+          result: aiResult,
+        }),
+      })
+    } catch (error) {
+      console.warn("Não foi possível salvar o post da comunidade:", error)
     }
   }
 
@@ -141,7 +195,7 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
       console.log("Iniciando processamento da imagem...")
 
       let base64String = ""
-      let mimeType = imagemSelecionada.type
+      let mimeType = imagemSelecionada.type || "image/jpeg"
 
       const reader = new FileReader()
       
@@ -182,7 +236,13 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
       const dadosDoBoneco = await response.json()
 
       onParametrosGerados(dadosDoBoneco)
-      
+
+      try {
+        const previewDataUrl = await createPreviewDataUrl(imagemSelecionada)
+        await saveCommunityPost(previewDataUrl, mimeType, dadosDoBoneco)
+      } catch (error) {
+        console.warn("Falha ao preparar o post para a galeria:", error)
+      }
     } catch (error: any) {
       console.error("Erro no front:", error)
       alert(`Erro: ${error.message || "Não foi possível conectar à IA."}`)
@@ -255,16 +315,16 @@ function InputZone({ onParametrosGerados, resultadoIA }: { onParametrosGerados: 
   )
 }
 
-export function Dashboard({ onLogout }: { onLogout: () => void }) {
+export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [resultadoIA, setResultadoIA] = useState<any>(null)
 
   return (
     <div className="flex min-h-screen flex-col">
-      <TopBar onLogout={onLogout} />
+      <TopBar user={user} onLogout={onLogout} />
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
         <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
           <div className="lg:h-[calc(100vh-7rem)]">
-            <InputZone onParametrosGerados={setResultadoIA} resultadoIA={resultadoIA} />
+            <InputZone onParametrosGerados={setResultadoIA} resultadoIA={resultadoIA} userEmail={user.email} />
           </div>
 
           <Card className="border-border bg-card lg:h-[calc(100vh-7rem)]">
@@ -272,6 +332,10 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
               <ResultsPanel data={resultadoIA} />
             </CardContent>
           </Card>
+        </div>
+
+        <div className="mt-6">
+          <CommunityGallery />
         </div>
       </main>
     </div>

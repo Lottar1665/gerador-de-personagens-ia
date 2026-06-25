@@ -4,11 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const presets = [
+const DEFAULT_PRESETS = [
   {
     id: 1,
     nome: "Akemi (Sobrevivente)",
-    imagemUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80", // Placeholder temporário
+    imagemUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
     parametros: { mandíbula: 45, centro: 40 }
   },
   {
@@ -32,8 +32,36 @@ const presets = [
 ];
 
 export default function PresetsCarousel() {
+  const [presets, setPresets] = useState(DEFAULT_PRESETS);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
+
+  useEffect(() => {
+    let mounted = true
+
+    fetch("/api/presets")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Falha ao carregar presets")
+        }
+        return response.json()
+      })
+      .then((data) => {
+        if (!mounted) return
+        if (Array.isArray(data.presets) && data.presets.length > 0) {
+          setPresets(data.presets)
+          setCurrentIndex(0)
+        }
+      })
+      .catch(() => {
+        // Mantém os presets padrão caso a API falhe
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, []);
+
 
   // Função para avançar (memorizada para o useEffect não se perder)
   const nextSlide = useCallback(() => {

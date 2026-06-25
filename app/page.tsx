@@ -1,47 +1,52 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { onAuthStateChanged, signOut, type User } from "firebase/auth"
 
-import { cn } from "@/lib/utils"
+import { auth } from "@/lib/firebase"
+import { isAdminEmail } from "@/lib/auth"
 import { AuthScreen } from "@/components/auth-screen"
 import { Dashboard } from "@/components/dashboard"
-
-type View = "auth" | "dashboard"
+import { AdminDashboard } from "@/components/admin-dashboard"
 
 export default function Page() {
-  const [view, setView] = useState<View>("auth")
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Seletor de visão para o preview */}
-      <div className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border bg-card/90 p-1 shadow-xl backdrop-blur">
-        {(
-          [
-            { id: "auth", label: "Autenticação" },
-            { id: "dashboard", label: "Dashboard" },
-          ] as const
-        ).map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setView(item.id)}
-            className={cn(
-              "rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
-              view === item.id
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
+  useEffect(() => {
+    if (!auth) {
+      setLoading(false)
+      return
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser)
+      setLoading(false)
+    })
+
+    return unsubscribe
+  }, [])
+
+  const handleLogout = async () => {
+    if (!auth) return
+    await signOut(auth)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
+        Carregando autenticação...
       </div>
+    )
+  }
 
-      {view === "auth" ? (
-        <AuthScreen />
-      ) : (
-        <Dashboard onLogout={() => setView("auth")} />
-      )}
-    </div>
-  )
+  if (!user) {
+    return <AuthScreen />
+  }
+
+  if (isAdminEmail(user.email)) {
+    return <AdminDashboard user={user} onLogout={handleLogout} />
+  }
+
+  return <Dashboard user={user} onLogout={handleLogout} />
 }

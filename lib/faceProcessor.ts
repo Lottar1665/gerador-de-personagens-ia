@@ -1,4 +1,4 @@
-import { MainTab } from "@/types/face";
+import { MainTab } from "@/lib/face-parameters"
 
 // Função para calcular a distância tridimensional entre dois pontos
 function calcularDistancia3D(p1: any, p2: any): number {
