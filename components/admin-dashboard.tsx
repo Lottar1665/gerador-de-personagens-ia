@@ -6,7 +6,7 @@ import { LogOut, ShieldCheck, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import CommunityGallery from "./community-gallery"
+import CommunityGallery from "../app/community/page"
 
 export function AdminDashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
   return (

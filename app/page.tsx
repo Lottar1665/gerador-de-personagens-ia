@@ -1,58 +1,84 @@
-import Link from "next/link"
-import CommunityHomeCarousel from "@/components/community-home-carousel"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import Link from "next/link";
 
-export default function Home() {
+const stats = [
+  { num: "12.4k", label: "Jogadores criados" },
+  { num: "3.8k", label: "Usuários ativos" },
+  { num: "98%", label: "Precisão facial" },
+  { num: "4.9★", label: "Avaliação" },
+];
+
+const features = [
+  {
+    icon: "📸",
+    title: "Envie sua foto",
+    desc: "Faça upload de qualquer foto com o rosto visível — nosso sistema cuida do resto.",
+  },
+  {
+    icon: "🤖",
+    title: "IA analisa seu rosto",
+    desc: "MediaPipe mapeia 468 pontos faciais e o Gemini traduz em atributos de jogador únicos.",
+  },
+  {
+    icon: "🎮",
+    title: "Importe no EA FC 2026",
+    desc: "Exporte os dados do preset e use diretamente na criação de personagem do jogo.",
+  },
+];
+
+export default function HomePage() {
   return (
-    <main className="min-h-screen bg-background px-4 py-14 text-foreground">
-      <div className="mx-auto max-w-6xl">
-        <section className="space-y-6 text-center">
-          <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">Bem-vindo ao gerador de rostos</p>
-          <h1 className="text-4xl font-bold sm:text-5xl">Veja os parâmetros gerados pela comunidade</h1>
-          <p className="mx-auto max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
-            Aqui você encontra os parâmetros liberados pelos usuários em um carrossel animado, com a mesma interface do dashboard.
-          </p>
-        </section>
+    <div className="max-w-5xl mx-auto px-6 py-8">
+      {/* Hero */}
+      <section className="text-center py-16 pb-12">
+        <div className="inline-flex items-center gap-1.5 bg-fc-green-dim text-fc-green text-xs font-semibold px-3 py-1 rounded-full mb-5 border border-fc-green-dim tracking-wide">
+          ⚽ EA FC 2026 · IA + MediaPipe + Gemini
+        </div>
+        <h1 className="text-5xl sm:text-6xl font-black leading-[1.05] mb-4 tracking-tight text-fc-text">
+          Crie seu{" "}
+          <span className="text-fc-green">jogador</span>
+          <br />
+          com o seu rosto
+        </h1>
+        <p className="text-fc-text2 text-lg max-w-xl mx-auto mb-9 leading-relaxed">
+          Envie uma foto, nossa IA analisa seu rosto com MediaPipe e gera um
+          preset personalizado para o EA FC 2026.
+        </p>
+        <div className="flex gap-3 justify-center flex-wrap">
+          <Link href="/dashboard" className="btn-primary">
+            Criar meu jogador
+          </Link>
+          <Link href="/community" className="btn-secondary">
+            Ver comunidade
+          </Link>
+        </div>
+      </section>
 
-        <div className="mt-10 grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
-          <Card className="border-border bg-card">
-            <CardContent className="space-y-6">
-              <div>
-                <p className="text-sm font-medium text-foreground">Acesse rapidamente</p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Vá direto para o painel de geração, veja a galeria da comunidade ou acesse os parâmetros que você mesmo publicou.
-                </p>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Link href="/dashboard?tab=generate" className="block">
-                  <Button size="sm" className="w-full">Gerar parâmetros</Button>
-                </Link>
-                <Link href="/dashboard?tab=community" className="block">
-                  <Button variant="outline" size="sm" className="w-full">Galeria da comunidade</Button>
-                </Link>
-                <Link href="/dashboard?tab=meus" className="block">
-                  <Button variant="secondary" size="sm" className="w-full">Minha área</Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="rounded-[2rem] border border-border bg-card p-6">
-            <p className="text-sm font-medium text-foreground">Como funciona</p>
-            <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
-              <li className="rounded-2xl border border-border/50 bg-secondary/10 p-3">A home mostra um carrossel animado com parâmetros aprovados pela comunidade.</li>
-              <li className="rounded-2xl border border-border/50 bg-secondary/10 p-3">A galeria pública exibe apenas parâmetros compartilhados pelos usuários.</li>
-              <li className="rounded-2xl border border-border/50 bg-secondary/10 p-3">Sua área mostra apenas os parâmetros que você publicou.</li>
-            </ul>
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-12">
+        {stats.map(({ num, label }) => (
+          <div key={label} className="card text-center py-5">
+            <div className="text-fc-green text-3xl font-black">{num}</div>
+            <div className="text-fc-text2 text-sm mt-1">{label}</div>
           </div>
-        </div>
-
-        <div className="mt-12">
-          <CommunityHomeCarousel />
-        </div>
+        ))}
       </div>
-    </main>
-  )
+
+      {/* How it works */}
+      <p className="section-eyebrow mb-4">Como funciona</p>
+      <div className="grid sm:grid-cols-3 gap-4">
+        {features.map(({ icon, title, desc }) => (
+          <div
+            key={title}
+            className="card hover:border-fc-green transition-colors duration-200"
+          >
+            <div className="w-11 h-11 bg-fc-green-dim rounded-lg flex items-center justify-center text-2xl mb-3.5">
+              {icon}
+            </div>
+            <h3 className="text-fc-text font-bold text-sm mb-2">{title}</h3>
+            <p className="text-fc-text2 text-sm leading-relaxed">{desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }

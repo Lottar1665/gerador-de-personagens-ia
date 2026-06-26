@@ -82,17 +82,194 @@
   --sidebar-accent-foreground: #f8fafc;
   --sidebar-border: #334155;
   --sidebar-ring: #d2ff00;
+  --green: #00e676;
+  --green-hover: #00c853;
+  --green-dim: rgba(0, 230, 118, 0.12);
+  --green-border: rgba(0, 230, 118, 0.3);
+  --fc-bg: #0a0f0a;
+  --fc-bg2: #111811;
+  --fc-bg3: #1a231a;
+  --fc-card: #141e14;
+  --fc-card2: #1c281c;
+  --fc-text: #f0f4f0;
+  --fc-text2: #a8bca8;
+  --fc-text3: #6b836b;
+  --fc-border: #2a3d2a;
+  --fc-border2: #3a513a;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+.light {
+  color-scheme: light;
+  --fc-bg: #f0f4f0;
+  --fc-bg2: #e8efe8;
+  --fc-bg3: #dce8dc;
+  --fc-card: #ffffff;
+  --fc-card2: #f5faf5;
+  --fc-text: #0d1a0d;
+  --fc-text2: #3a5a3a;
+  --fc-text3: #6b836b;
+  --fc-border: #c8d8c8;
+  --fc-border2: #a8c0a8;
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
+
   body {
-    @apply bg-background text-foreground;
+    background-color: var(--fc-bg);
+    color: var(--fc-text);
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
+
   html {
     @apply font-sans;
+  }
+}
+
+@layer utilities {
+  .bg-fc-bg { background-color: var(--fc-bg); }
+  .bg-fc-bg2 { background-color: var(--fc-bg2); }
+  .bg-fc-bg3 { background-color: var(--fc-bg3); }
+  .bg-fc-card { background-color: var(--fc-card); }
+  .bg-fc-card2 { background-color: var(--fc-card2); }
+  .bg-fc-green { background-color: var(--green); }
+  .bg-fc-green-dim { background-color: var(--green-dim); }
+
+  .text-fc-text { color: var(--fc-text); }
+  .text-fc-text2 { color: var(--fc-text2); }
+  .text-fc-text3 { color: var(--fc-text3); }
+  .text-fc-green { color: var(--green); }
+
+  .border-fc { border-color: var(--fc-border); }
+  .border-fc2 { border-color: var(--fc-border2); }
+  .border-fc-green { border-color: var(--green); }
+  .border-fc-green-dim { border-color: var(--green-border); }
+
+  .btn-primary {
+    background-color: var(--green);
+    color: #000;
+    font-weight: 700;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-primary:hover {
+    opacity: 0.9;
+    transform: scale(0.98);
+  }
+
+  .btn-secondary {
+    background-color: transparent;
+    color: var(--fc-text);
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--fc-border2);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--green);
+    color: var(--green);
+  }
+
+  .btn-ghost {
+    background-color: transparent;
+    color: var(--fc-text2);
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--fc-border);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-ghost:hover {
+    background-color: var(--fc-bg3);
+    color: var(--fc-text);
+  }
+
+  .card {
+    background-color: var(--fc-card);
+    border: 1px solid var(--fc-border);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+  }
+
+  .input {
+    width: 100%;
+    background-color: var(--fc-bg3);
+    border: 1px solid var(--fc-border2);
+    border-radius: 0.5rem;
+    padding: 0.625rem 1rem;
+    color: var(--fc-text);
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  .input:focus {
+    border-color: var(--green);
+  }
+
+  .input::placeholder {
+    color: var(--fc-text3);
+  }
+
+  .nav-link {
+    padding: 0.375rem 0.875rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--fc-text2);
+    font-weight: 500;
+    transition: all 0.15s ease;
+  }
+
+  .nav-link:hover {
+    background-color: var(--fc-bg3);
+    color: var(--fc-text);
+  }
+
+  .nav-link-active {
+    background-color: var(--green-dim);
+    color: var(--green);
+    font-weight: 600;
+  }
+
+  .attr-bar {
+    height: 0.25rem;
+    background-color: var(--fc-border);
+    border-radius: 9999px;
+    overflow: hidden;
+    margin-top: 0.375rem;
+  }
+
+  .attr-fill {
+    height: 100%;
+    background-color: var(--green);
+    border-radius: 9999px;
+    transition: all 0.7s ease;
+  }
+
+  .section-eyebrow {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--fc-text3);
   }
 }
 
