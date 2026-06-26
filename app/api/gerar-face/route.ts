@@ -47,7 +47,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Imagem não fornecida." }, { status: 400 })
     }
 
-    // Limpa o cabeçalho do Base64 corretamente extraindo a segunda parte do array
     const rawBase64 = imageBase64.includes(",") ? imageBase64.split(",")[1] : imageBase64
 
     const geminiApiKey = process.env.GEMINI_API_KEY
@@ -56,9 +55,6 @@ export async function POST(request: Request) {
     }
 
     const ai = new GoogleGenAI({ apiKey: geminiApiKey })
-    if (!mimeType || mimeType === "") {
-      console.warn("mimeType vazio recebido da requisição — usando fallback image/jpeg")
-    }
 
     const sliderLabelsList = faceParameters
       .flatMap(tab => tab.subTabs)
@@ -72,24 +68,15 @@ export async function POST(request: Request) {
       "",
       "Analyze the face in the image.",
       "",
-      "Return ONLY a JSON object.",
+      "Return ONLY a flat JSON object where keys are the exact names from the valid list below.",
       "",
       "Rules:",
+      "1. Use ONLY the exact slider names provided in the valid list.",
+      "2. For each slider key, return an integer value between 0 and 100.",
+      "3. Do NOT wrap values in nested objects like {value: 50}.",
+      "4. Do NOT add explanations, commentary, or markdown blocks.",
       "",
-      "1. Use ONLY the slider names provided in the valid list.",
-      "2. For each slider key return either:",
-      "   - an integer value between 0 and 100, OR",
-      "   - an object with exactly two fields: { \"value\": an integer between 0 and 100, \"confidence\": an integer between 0 and 100 }.",
-      "3. If you are uncertain about a value, still provide your best estimate and set a lower 'confidence' (0-100).",
-      "4. Do NOT add explanations or commentary.",
-      "5. Do NOT add markdown.",
-      "6. Do NOT invent new keys — use the exact key text shown in the valid list.",
-      "7. Use integers only (no decimals).",
-      "",
-      "Example valid formats: a numeric value (e.g. 63) OR an object with 'value' and 'confidence' fields (e.g. {value:72, confidence:85}).",
-      "",
-      "Valid sliders:",
-      "",
+      "Valid sliders list:",
       "[ " + sliderLabelsList + " ]",
     ].join("\n")
 
@@ -112,58 +99,28 @@ export async function POST(request: Request) {
         }
       })
 
-      const text = response.text ?? "{}"
-      console.log("================================")
-      console.log("IA RAW RESPONSE:", text)
-      return text
+      return response.text ?? "{}"
     }
 
     const rawTextResponse = await sendToGemini(systemPrompt)
     const flatSlidersMap = parseFlatJson(rawTextResponse)
     const normalizedResponseMap = new Map<string, any>()
 
-    // Mapeia diretamente os valores e trata se houver algum aninhamento ou objeto estruturado
-    const isNested = Object.values(flatSlidersMap).some((v) => v && typeof v === "object" && !Object.prototype.hasOwnProperty.call(v, "value"))
-    
-    if (isNested) {
-      console.log("IA retornou objeto aninhado estrutural — aplicando flatten para extrair sliders.")
-      const valueTokens = new Set(["value", "valor"])
-      const flatten = (obj: any, path: string[] = []) => {
-        Object.entries(obj).forEach(([k, v]) => {
-          if (v !== null && typeof v === "object" && !Object.prototype.hasOwnProperty.call(v, "value")) {
-            flatten(v, [...path, k])
-          } else {
-            const leafKey = k
-            const fullPathArr = [...path, k]
-            const fullPath = fullPathArr.join(" ")
-            const normLeaf = normalizeKey(leafKey)
-
-            if (valueTokens.has(normLeaf)) {
-              const pathWithoutLeaf = normalizeKey(path.join(" "))
-              normalizedResponseMap.set(pathWithoutLeaf, v)
-            } else {
-              const cleanedFull = normalizeKey(fullPath).replace(/\b(value|valor)\b/g, "").replace(/\s+/g, " ").trim()
-              normalizedResponseMap.set(normalizeKey(leafKey), v)
-              normalizedResponseMap.set(cleanedFull, v)
-            }
-          }
-        })
+    Object.entries(flatSlidersMap).forEach(([key, value]) => {
+      const normalizedKeyStr = normalizeKey(key)
+      
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        if (Object.prototype.hasOwnProperty.call(value, "value")) {
+          normalizedResponseMap.set(normalizedKeyStr, (value as any).value)
+        }
+      } else {
+        normalizedResponseMap.set(normalizedKeyStr, value)
       }
-      flatten(flatSlidersMap)
-    } else {
-      Object.entries(flatSlidersMap).forEach(([key, value]) => {
-        normalizedResponseMap.set(normalizeKey(key), value)
-      })
-    }
-
-    console.log("IA KEYS RECEBIDAS:", Object.keys(flatSlidersMap))
-    console.log("IA MAPA CONFIGURADO:", [...normalizedResponseMap.keys()])
+    })
 
     const structureResult: any = {}
     const missingKeys: string[] = []
-    const recognizedKeys = new Set<string>()
     const confidencesMap: Record<string, number | null> = {}
-    const lowConfidenceKeys: string[] = []
 
     faceParameters.forEach((tab) => {
       structureResult[tab.label] = {}
@@ -175,6 +132,7 @@ export async function POST(request: Request) {
             const fallbackValue = (slider as any).default ?? (slider as any).value ?? 50
             const targetKey = normalizeKey(slider.labelAI)
             const altKey = normalizeKey(slider.label)
+            
             let aiValue = normalizedResponseMap.get(targetKey)
             let confidence: number | null = null
 
@@ -182,7 +140,7 @@ export async function POST(request: Request) {
               aiValue = normalizedResponseMap.get(altKey)
             }
 
-                         if (aiValue === undefined) {
+            if (aiValue === undefined) {
               const match = [...normalizedResponseMap.entries()].find(([receivedKey]) =>
                 receivedKey === targetKey ||
                 receivedKey === altKey ||
@@ -192,22 +150,8 @@ export async function POST(request: Request) {
                 altKey.includes(receivedKey)
               )
               if (match) {
-                aiValue = match[1] // 👈 CORREÇÃO: Captura apenas o VALOR (segundo item da array)
-                recognizedKeys.add(match[0]) // Guarda a chave de texto correspondente
-              }
-            } else {
-              recognizedKeys.add(targetKey)
-            }
-
-
-
-            // Garante a extração se o valor vier empacotado como objeto de confiança
-            if (aiValue !== undefined && aiValue !== null && typeof aiValue === "object") {
-              if (Object.prototype.hasOwnProperty.call(aiValue, "value")) {
-                const maybeValue = (aiValue as any).value
-                const maybeConfidence = (aiValue as any).confidence
-                if (typeof maybeValue === "number") aiValue = maybeValue
-                if (typeof maybeConfidence === "number") confidence = maybeConfidence
+                // 🔥 EXTRAÇÃO DA TUPLA CORRIGIDA: Pega o valor real (índice 1) do par [chave, valor]
+                aiValue = match[1] 
               }
             }
 
@@ -221,7 +165,7 @@ export async function POST(request: Request) {
               }
             }
 
-            if (confidence === null && aiValue !== undefined) {
+            if (aiValue !== undefined) {
               confidence = DEFAULT_NUMERIC_CONFIDENCE
             }
 
@@ -230,8 +174,6 @@ export async function POST(request: Request) {
 
             if (aiValue === undefined) {
               missingKeys.push(slider.labelAI)
-            } else if (confidence !== null && confidence < 50) {
-              lowConfidenceKeys.push(slider.labelAI)
             }
           })
         })
@@ -242,7 +184,6 @@ export async function POST(request: Request) {
       parameters: structureResult,
       meta: {
         missingKeys,
-        lowConfidenceKeys,
         confidences: confidencesMap
       }
     })

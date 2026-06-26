@@ -180,76 +180,59 @@ function InputZone({ onParametrosGerados, resultadoIA, userEmail }: { onParametr
     }
   }
 
-  const handleGerarParametros = async () => {
-    if (isLoading) {
-      return
-    }
-
+    const handleGerarParametros = async () => {
     if (!imagemSelecionada) {
-      alert("Por favor, anexe uma foto antes de gerar os parâmetros.")
+      alert("Por favor, selecione ou envie uma foto primeiro.")
       return
     }
 
     setIsLoading(true)
     try {
-      console.log("Iniciando processamento da imagem...")
+      // 1. Gera a imagem comprimida em Base64 usando a ferramenta nativa do seu arquivo
+      const base64String = await createPreviewDataUrl(imagemSelecionada)
 
-      let base64String = ""
-      let mimeType = imagemSelecionada.type || "image/jpeg"
-
-      const reader = new FileReader()
-      
-      const base64Promise = new Promise<string>((resolve, reject) => {
-        reader.onloadend = () => {
-          if (typeof reader.result === "string") {
-            resolve(reader.result.split(",")[1])
-          } else {
-            reject(new Error("Não foi possível processar a imagem."))
-          }
-        }
-        reader.onerror = () => reject(new Error("Erro na leitura do arquivo."))
-      })
-      
-      reader.readAsDataURL(imagemSelecionada)
-      base64String = await base64Promise
-
+      // 2. Dispara a requisição para a API do Gemini
       const response = await fetch("/api/gerar-face", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          descricao: "Extrair parâmetros faciais da foto",
           imageBase64: base64String,
-          mimeType: mimeType
-        })
+          mimeType: imagemSelecionada.type || "image/jpeg",
+        }),
       })
-
-      const contentType = response.headers.get("content-type")
-      if (!contentType || !contentType.includes("application/json")) {
-        throw new Error("O servidor falhou ou a rota da API não foi encontrada.")
-      }
 
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || "Falha na requisição da API.")
       }
 
-      const dadosDoBoneco = await response.json()
+      const data = await response.json()
 
-      onParametrosGerados(dadosDoBoneco)
+      // 3. Verifica se a estrutura de dados aninhada existe
+      if (data.parameters) {
+        // 🔥 ATUALIZAÇÃO DO VETOR DO ROSTO:
+        // Passa os parâmetros da IA para a função que sincroniza o estado dos Sliders na tela
+        onParametrosGerados(data.parameters)
 
-      try {
-        const previewDataUrl = await createPreviewDataUrl(imagemSelecionada)
-        await saveCommunityPost(previewDataUrl, mimeType, dadosDoBoneco)
-      } catch (error) {
-        console.warn("Falha ao preparar o post para a galeria:", error)
+        // 4. Salva o post de forma assíncrona na Galeria da Comunidade automaticamente
+        await saveCommunityPost(base64String, imagemSelecionada.type, data.parameters)
+
+        alert("Parâmetros faciais gerados e aplicados com sucesso!")
+      } else {
+        throw new Error("A IA processou a imagem, mas não retornou a estrutura de parâmetros válida.")
       }
+
     } catch (error: any) {
-      console.error("Erro no front:", error)
-      alert(`Erro: ${error.message || "Não foi possível conectar à IA."}`)
+      console.error("Erro ao gerar parâmetros:", error)
+      alert(error.message || "Erro ao processar imagem com o Gemini.")
     } finally {
       setIsLoading(false)
     }
   }
+
+
 
   return (
     <Card className="flex h-full flex-col border-border bg-card">
