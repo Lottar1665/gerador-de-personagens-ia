@@ -87,7 +87,7 @@ const areaOptions = useMemo<any[]>(() => {
 }, [tab]);
 
 
-  const area = areaOptions[Math.min(areaIndex, areaOptions.length - 1)]
+  const area = areaOptions.length > 0 ? areaOptions[Math.min(areaIndex, areaOptions.length - 1)] : undefined
 
   useEffect(() => {
     setAreaIndex(0)
@@ -116,11 +116,13 @@ const areaOptions = useMemo<any[]>(() => {
   }
 
   const activeArea = area ?? {
-    subTab: tab.subTabs[0],
-    group: tab.subTabs[0]?.groups[0] ?? { id: "", label: "", sliders: [] },
+    subTab: { id: "", label: "Sem dados", groups: [] },
+    group: { id: "", label: "Sem dados", sliders: [] },
   }
 
-  const areaLabel = `${activeArea.subTab.label} · ${activeArea.group.label}`
+  const areaLabel = area
+    ? `${activeArea.subTab.label} · ${activeArea.group.label}`
+    : "Sem dados disponíveis"
 
   return (
     <div className="flex h-full flex-col gap-4">
@@ -143,7 +145,7 @@ const areaOptions = useMemo<any[]>(() => {
         />
 
         <Stepper
-          label={`${areaLabel} (${areaIndex + 1}/${areaOptions.length})`}
+          label={`${areaLabel} (${areaOptions.length > 0 ? areaIndex + 1 : 0}/${areaOptions.length})`}
           onPrev={() => cycleArea(-1)}
           onNext={() => cycleArea(1)}
           indented
