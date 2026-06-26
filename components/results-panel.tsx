@@ -153,7 +153,7 @@ const areaOptions = useMemo<any[]>(() => {
 
         <div className="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-rounded scrollbar-track-transparent scrollbar-thumb-slate-700/40">
           <div className="space-y-4 py-2">
-            {activeArea.group.sliders.map((slider) => {
+            {activeArea.group.sliders.map((slider: { id: string; label: string; default: number }) => {
               const rawValue = data?.[tab.label]?.[activeArea.subTab.label]?.[activeArea.group.label]?.[slider.label]
               const sliderValue = typeof rawValue === "number" ? rawValue : Number(rawValue ?? slider.default)
 
