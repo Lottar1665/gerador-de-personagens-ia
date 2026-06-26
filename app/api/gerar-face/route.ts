@@ -1,7 +1,9 @@
+// app/api/gerar-preset/route.ts
 import { NextResponse } from "next/server"
 import { Buffer } from "buffer"
 import { GoogleGenAI } from "@google/genai"
 import { faceParameters } from "@/lib/face-parameters"
+import { converterParaSlider } from "@/lib/motorMatematico" // 1. Importa seu motor
 
 const normalizeKey = (key: string) =>
   key
@@ -12,6 +14,11 @@ const normalizeKey = (key: string) =>
     .trim()
 
 const DEFAULT_NUMERIC_CONFIDENCE = 60
+
+// Função auxiliar para calcular distância 3D entre os pontos enviados
+const dist3D = (p1: any, p2: any) => {
+  return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2) + Math.pow(p2.z - p1.z, 2));
+};
 
 const parseFlatJson = (text: string) => {
   const jsonStartIndex = text.indexOf("{")
@@ -40,7 +47,8 @@ const parseFlatJson = (text: string) => {
 
 export async function POST(request: Request) {
   try {
-    const { imageBase64, mimeType } = await request.json()
+    // 2. Adiciona o recebimento das landmarks vindas do MediaPipe do frontend
+    const { imageBase64, mimeType, landmarksFrente } = await request.json()
     const mimeTypeClean = mimeType || "image/jpeg"
 
     if (!imageBase64) {
@@ -56,17 +64,37 @@ export async function POST(request: Request) {
 
     const ai = new GoogleGenAI({ apiKey: geminiApiKey })
 
-    const sliderLabelsList = faceParameters
-      .flatMap(tab => tab.subTabs)
-      .flatMap(sub => sub.groups)
-      .flatMap(g => g.sliders)
-      .map(s => `"${s.labelAI}"`)
-      .join(", ")
+    // 3. SE AS LANDMARKS EXISTIREM: O servidor calcula a base anatômica 3D rígida
+    let slidersMatematicos: Record<string, number> = {};
+    if (landmarksFrente && landmarksFrente.length > 0) {
+      const dip = dist3D(landmarksFrente[133], landmarksFrente[362]);
+      
+      slidersMatematicos = {
+        "largura maxilar": converterParaSlider('largura_maxilar', dist3D(landmarksFrente[172], landmarksFrente[397]) / dip),
+        "distancia sobrancelha ao olho": converterParaSlider('distancia_sobrancelha_olho', dist3D(landmarksFrente[70], landmarksFrente[159]) / dip),
+        "largura do nariz": converterParaSlider('largura_nariz', dist3D(landmarksFrente[61], landmarksFrente[291]) / dip),
+        "largura da boca": converterParaSlider('largura_boca', dist3D(landmarksFrente[57], landmarksFrente[287]) / dip),
+        "abertura vertical da palpebra": converterParaSlider('abertura_palpebra', dist3D(landmarksFrente[159], landmarksFrente[145]) / dip)
+      };
+    }
 
+    const sliderLabelsList = faceParameters
+  .flatMap(category => category.mainTabs || [])
+  .flatMap(tab => tab.subTabs || [])
+  .flatMap(sub => sub.groups || [])
+  .flatMap(g => g.sliders || [])
+  .map(s => `"${s.labelAI}"`)
+  .join(", ")
+
+
+    // 4. Injeta os dados geométricos calculados no System Prompt para o Gemini refinar esteticamente
     const systemPrompt = [
       "You are an EA FC 26 face analysis engine.",
       "",
       "Analyze the face in the image.",
+      "",
+      "You will receive a base estimation of sliders calculated from 3D rigid geometry. Your job is to visually inspect the face textures, shadows, and ethnic details to adjust these numbers by at most +=12 or -=12 points, and guess the remaining sliders.",
+      landmarksFrente ? `Base geometric sliders to refine: ${JSON.stringify(slidersMatematicos)}` : "",
       "",
       "Return ONLY a flat JSON object where keys are the exact names from the valid list below.",
       "",
@@ -122,63 +150,69 @@ export async function POST(request: Request) {
     const missingKeys: string[] = []
     const confidencesMap: Record<string, number | null> = {}
 
-    faceParameters.forEach((tab) => {
-      structureResult[tab.label] = {}
-      tab.subTabs.forEach((sub) => {
-        structureResult[tab.label][sub.label] = {}
-        sub.groups.forEach((group) => {
-          structureResult[tab.label][sub.label][group.label] = {}
-          group.sliders.forEach((slider) => {
-            const fallbackValue = (slider as any).default ?? (slider as any).value ?? 50
-            const targetKey = normalizeKey(slider.labelAI)
-            const altKey = normalizeKey(slider.label)
-            
-            let aiValue = normalizedResponseMap.get(targetKey)
-            let confidence: number | null = null
+    faceParameters.forEach((category) => {
+  structureResult[category.label] = {}
+  
+  category.mainTabs.forEach((tab) => {
+    structureResult[category.label][tab.label] = {}
+    
+    tab.subTabs.forEach((sub) => {
+      structureResult[category.label][tab.label][sub.label] = {}
+      
+      sub.groups.forEach((group) => {
+        structureResult[category.label][tab.label][sub.label][group.label] = {}
+        
+        group.sliders.forEach((slider) => {
+          const fallbackValue = (slider as any).default ?? (slider as any).value ?? 50
+          const targetKey = normalizeKey(slider.labelAI)
+          const altKey = normalizeKey(slider.label)
+          
+          let aiValue = normalizedResponseMap.get(targetKey)
+          let confidence: number | null = null
 
-            if (aiValue === undefined) {
-              aiValue = normalizedResponseMap.get(altKey)
+          if (aiValue === undefined) {
+            aiValue = normalizedResponseMap.get(altKey)
+          }
+
+          if (aiValue === undefined) {
+            const match = [...normalizedResponseMap.entries()].find(([receivedKey]) =>
+              receivedKey === targetKey ||
+              receivedKey === altKey ||
+              receivedKey.includes(targetKey) ||
+              targetKey.includes(receivedKey)
+            )
+            if (match) {
+              aiValue = match[1] 
             }
+          }
 
-            if (aiValue === undefined) {
-              const match = [...normalizedResponseMap.entries()].find(([receivedKey]) =>
-                receivedKey === targetKey ||
-                receivedKey === altKey ||
-                receivedKey.includes(targetKey) ||
-                targetKey.includes(receivedKey) ||
-                receivedKey.includes(altKey) ||
-                altKey.includes(receivedKey)
-              )
-              if (match) {
-                // 🔥 EXTRAÇÃO DA TUPLA CORRIGIDA: Pega o valor real (índice 1) do par [chave, valor]
-                aiValue = match[1] 
-              }
+          let finalValue = fallbackValue
+          if (typeof aiValue === "number") {
+            finalValue = Math.max(0, Math.min(100, Math.round(aiValue)))
+          } else if (typeof aiValue === "string") {
+            const parsed = parseInt(aiValue, 10)
+            if (!isNaN(parsed)) {
+              finalValue = Math.max(0, Math.min(100, parsed))
             }
+          }
 
-            let finalValue = fallbackValue
-            if (typeof aiValue === "number") {
-              finalValue = Math.max(0, Math.min(100, Math.round(aiValue)))
-            } else if (typeof aiValue === "string") {
-              const parsed = parseInt(aiValue, 10)
-              if (!isNaN(parsed)) {
-                finalValue = Math.max(0, Math.min(100, parsed))
-              }
-            }
+          if (aiValue !== undefined) {
+            confidence = DEFAULT_NUMERIC_CONFIDENCE
+          }
 
-            if (aiValue !== undefined) {
-              confidence = DEFAULT_NUMERIC_CONFIDENCE
-            }
+          // Monta o JSON final respeitando os 5 níveis aninhados para o seu frontend ler sem travar
+          structureResult[category.label][tab.label][sub.label][group.label][slider.label] = finalValue
+          confidencesMap[slider.labelAI] = confidence
 
-            structureResult[tab.label][sub.label][group.label][slider.label] = finalValue
-            confidencesMap[slider.labelAI] = confidence
-
-            if (aiValue === undefined) {
-              missingKeys.push(slider.labelAI)
-            }
-          })
+          if (aiValue === undefined) {
+            missingKeys.push(slider.labelAI)
+          }
         })
       })
     })
+  })
+})
+
 
     return NextResponse.json({
       parameters: structureResult,

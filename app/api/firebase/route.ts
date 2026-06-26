@@ -32,16 +32,23 @@ export async function GET() {
     try {
       const q = query(postsRef, orderBy("createdAt", "desc"))
       const querySnapshot = await getDocs(q)
-      const posts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      const posts = querySnapshot.docs.map(doc => {
+        const data = doc.data()
+        const { previewDataUrl, ...cleanData } = data as any
+        return { id: doc.id, ...cleanData }
+      })
       return NextResponse.json(posts)
     } catch (orderError) {
       console.warn("⚠️ Falha ao ordenar por data (pode ser falta de posts ou índice). Buscando dados puros...")
       // Se quebrar por falta de posts/índice, busca a coleção pura sem travar
       const querySnapshot = await getDocs(query(postsRef))
-      const posts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      const posts = querySnapshot.docs.map(doc => {
+        const data = doc.data()
+        const { previewDataUrl, ...cleanData } = data as any
+        return { id: doc.id, ...cleanData }
+      })
       return NextResponse.json(posts)
     }
-
   } catch (error: any) {
     console.error("❌ Erro fatal ao buscar dados do Firebase:", error)
     return NextResponse.json(
@@ -59,24 +66,23 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { previewDataUrl, uploadedBy, result } = body
+    const { uploadedBy, userPhotoUrl, result } = body
 
     const novoPost = {
-      previewDataUrl: previewDataUrl || "",
       uploadedBy: uploadedBy || "Anônimo",
+      userPhotoUrl: userPhotoUrl || "",
       result: result || null,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     }
 
     const postsRef = collection(db, "posts")
     const docRef = await addDoc(postsRef, novoPost)
 
-    return NextResponse.json({ 
-      success: true, 
-      id: docRef.id, 
-      message: "Post compartilhado na comunidade com sucesso!" 
+    return NextResponse.json({
+      success: true,
+      id: docRef.id,
+      message: "Post compartilhado na comunidade com sucesso!",
     })
-
   } catch (error: any) {
     console.error("❌ Erro fatal ao salvar post no Firebase:", error)
     return NextResponse.json(

@@ -62,10 +62,30 @@ export function ResultsPanel({ data }: { data: any }) {
 
   const tab = faceParameters[tabIndex]
 
-  const areaOptions = useMemo<AreaOption[]>(
-    () => tab.subTabs.flatMap((subTab) => subTab.groups.map((group) => ({ subTab, group }))),
-    [tab],
-  )
+  // components/results-panel.tsx - Linhas 65 a 68
+const areaOptions = useMemo<any[]>(() => {
+  const t = tab as any;
+  if (!t) return [];
+
+  // Se for o novo objeto envelopado (Categoria que contém mainTabs)
+  if (t.mainTabs && Array.isArray(t.mainTabs)) {
+    return t.mainTabs.flatMap((mainTab: any) =>
+      (mainTab.subTabs || []).flatMap((subTab: any) =>
+        (subTab.groups || []).map((group: any) => ({ subTab, group }))
+      )
+    );
+  }
+
+  // Se for o formato de Aba Direta (que contém subTabs)
+  if (t.subTabs && Array.isArray(t.subTabs)) {
+    return t.subTabs.flatMap((subTab: any) =>
+      (subTab.groups || []).map((group: any) => ({ subTab, group }))
+    );
+  }
+
+  return [];
+}, [tab]);
+
 
   const area = areaOptions[Math.min(areaIndex, areaOptions.length - 1)]
 

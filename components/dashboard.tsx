@@ -9,8 +9,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ResultsPanel } from "@/components/results-panel"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import PresetsCarousel from "./presets-carousel"
 import CommunityGallery from "./community-gallery"
+import UserParametersArea from "./user-parameters-area"
 
 function TopBar({ user, onLogout }: { user: User; onLogout: () => void }) {
   const label = user.displayName || user.email || "Usuário"
@@ -116,10 +118,11 @@ function UploadArea({ onFileSelect }: { onFileSelect: (file: File | null) => voi
   )
 }
 
-function InputZone({ onParametrosGerados, resultadoIA, userEmail }: { onParametrosGerados: (dados: any) => void, resultadoIA: any, userEmail: string | null }) {
+function InputZone({ onParametrosGerados, resultadoIA, userEmail, userName, userPhotoUrl }: { onParametrosGerados: (dados: any) => void, resultadoIA: any, userEmail: string | null, userName: string | null, userPhotoUrl: string | null }) {
   const [isLoading, setIsLoading] = useState(false)
   const [imagemSelecionada, setImagemSelecionada] = useState<File | null>(null)
   const [imagemPreview, setImagemPreview] = useState<string | null>(null)
+  const [postToCommunity, setPostToCommunity] = useState(false)
 
   const handleFileSelect = (file: File | null) => {
     setImagemSelecionada(file)
@@ -163,15 +166,14 @@ function InputZone({ onParametrosGerados, resultadoIA, userEmail }: { onParametr
     })
   }
 
-  const saveCommunityPost = async (previewDataUrl: string, mimeType: string, aiResult: any) => {
+  const saveCommunityPost = async (aiResult: any) => {
     try {
       await fetch("/api/firebase", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          previewDataUrl,
-          mimeType,
-          uploadedBy: userEmail || "anônimo",
+          uploadedBy: userName || userEmail || "Anônimo",
+          userPhotoUrl,
           result: aiResult,
         }),
       })
@@ -180,7 +182,7 @@ function InputZone({ onParametrosGerados, resultadoIA, userEmail }: { onParametr
     }
   }
 
-    const handleGerarParametros = async () => {
+  const handleGerarParametros = async () => {
     if (!imagemSelecionada) {
       alert("Por favor, selecione ou envie uma foto primeiro.")
       return
@@ -216,8 +218,10 @@ function InputZone({ onParametrosGerados, resultadoIA, userEmail }: { onParametr
         // Passa os parâmetros da IA para a função que sincroniza o estado dos Sliders na tela
         onParametrosGerados(data.parameters)
 
-        // 4. Salva o post de forma assíncrona na Galeria da Comunidade automaticamente
-        await saveCommunityPost(base64String, imagemSelecionada.type, data.parameters)
+        // 4. Salva o post na Galeria da Comunidade somente se o usuário optar por isso
+        if (postToCommunity) {
+          await saveCommunityPost(data.parameters)
+        }
 
         alert("Parâmetros faciais gerados e aplicados com sucesso!")
       } else {
@@ -274,6 +278,18 @@ function InputZone({ onParametrosGerados, resultadoIA, userEmail }: { onParametr
           <UploadArea onFileSelect={handleFileSelect} />
         </div>
 
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <label className="inline-flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={postToCommunity}
+              onChange={(event) => setPostToCommunity(event.target.checked)}
+              className="accent-primary"
+            />
+            Publicar apenas os parâmetros na Galeria da Comunidade
+          </label>
+        </div>
+
         {/* PARTE DE BAIXO: Botão com a Trava de Segurança */}
         <Button 
           size="lg" 
@@ -298,28 +314,48 @@ function InputZone({ onParametrosGerados, resultadoIA, userEmail }: { onParametr
   )
 }
 
-export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
+export function Dashboard({ user, onLogout, initialTab = "generate" }: { user: User; onLogout: () => void; initialTab?: "generate" | "community" | "meus" }) {
   const [resultadoIA, setResultadoIA] = useState<any>(null)
 
   return (
     <div className="flex min-h-screen flex-col">
       <TopBar user={user} onLogout={onLogout} />
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
-        <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
-          <div className="lg:h-[calc(100vh-7rem)]">
-            <InputZone onParametrosGerados={setResultadoIA} resultadoIA={resultadoIA} userEmail={user.email} />
-          </div>
+        <Tabs defaultValue={initialTab} className="h-full">
+          <TabsList>
+            <TabsTrigger value="generate">Gerar parâmetros</TabsTrigger>
+            <TabsTrigger value="community">Galeria</TabsTrigger>
+            <TabsTrigger value="meus">Minha área</TabsTrigger>
+          </TabsList>
 
-          <Card className="border-border bg-card lg:h-[calc(100vh-7rem)]">
-            <CardContent className="h-full overflow-hidden">
-              <ResultsPanel data={resultadoIA} />
-            </CardContent>
-          </Card>
-        </div>
+          <TabsContent value="generate" className="h-full">
+            <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
+              <div className="lg:h-[calc(100vh-7rem)]">
+                <InputZone
+                  onParametrosGerados={setResultadoIA}
+                  resultadoIA={resultadoIA}
+                  userEmail={user.email}
+                  userName={user.displayName}
+                  userPhotoUrl={user.photoURL}
+                />
+              </div>
 
-        <div className="mt-6">
-          <CommunityGallery />
-        </div>
+              <Card className="border-border bg-card lg:h-[calc(100vh-7rem)]">
+                <CardContent className="h-full overflow-hidden">
+                  <ResultsPanel data={resultadoIA} />
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="community" className="space-y-6 py-4">
+            <CommunityGallery />
+          </TabsContent>
+
+          <TabsContent value="meus" className="space-y-6 py-4">
+            <UserParametersArea user={user} />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   )
