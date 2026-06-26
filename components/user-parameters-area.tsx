@@ -48,8 +48,8 @@ export default function UserParametersArea({ user }: { user: User }) {
           items
             .filter((post: CommunityPost) => post.uploadedBy === user.displayName || post.uploadedBy === userEmail)
             .sort((a: CommunityPost, b: CommunityPost) => {
-              const aTime = typeof a.createdAt === "string" ? new Date(a.createdAt).getTime() : typeof a.createdAt === "object" ? (a.createdAt.seconds ?? 0) * 1000 : 0
-              const bTime = typeof b.createdAt === "string" ? new Date(b.createdAt).getTime() : typeof b.createdAt === "object" ? (b.createdAt.seconds ?? 0) * 1000 : 0
+              const aTime = typeof a.createdAt === "string" ? new Date(a.createdAt).getTime() : (a.createdAt && typeof a.createdAt === "object") ? ((a.createdAt as any).seconds ?? 0) * 1000 : 0
+              const bTime = typeof b.createdAt === "string" ? new Date(b.createdAt).getTime() : (b.createdAt && typeof b.createdAt === "object") ? ((b.createdAt as any).seconds ?? 0) * 1000 : 0
               return bTime - aTime
             })
         )

@@ -1,6 +1,6 @@
 // lib/face-parameters.ts
 import { esqueletoParameters } from "./esqueleto"
- // Quando salvar o chunk do ChatGPT
+import { faceParametersPeleChunk } from "./pele" 
 
 export type Slider = {
   id: string
