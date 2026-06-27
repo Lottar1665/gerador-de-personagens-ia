@@ -5,128 +5,79 @@ import { ChevronLeft, ChevronRight, Layers } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { ParameterRow } from "@/components/parameter-row"
-import { faceParameters, type AccordionGroup, type SubTab } from "@/lib/face-parameters"
-
-function Stepper({
-  label,
-  onPrev,
-  onNext,
-  indented,
-}: {
-  label: string
-  onPrev: () => void
-  onNext: () => void
-  indented?: boolean
-}) {
-  return (
-    <div className={indented ? "relative pl-5" : undefined}>
-      {indented && (
-        <span
-          aria-hidden
-          className="absolute top-1/2 left-0 size-3 -translate-y-1/2 rounded-bl-md border-b border-l border-border"
-        />
-      )}
-      <div className="flex items-center justify-between rounded-lg border border-border bg-secondary/60 px-1.5 py-1.5">
-        <button
-          type="button"
-          onClick={onPrev}
-          aria-label="Anterior"
-          className="flex size-7 items-center justify-center rounded-md text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground"
-        >
-          <ChevronLeft className="size-4" />
-        </button>
-        <span className="truncate px-2 text-center text-sm font-semibold text-foreground">
-          {label}
-        </span>
-        <button
-          type="button"
-          onClick={onNext}
-          aria-label="Próximo"
-          className="flex size-7 items-center justify-center rounded-md text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground"
-        >
-          <ChevronRight className="size-4" />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-type AreaOption = {
-  subTab: SubTab
-  group: AccordionGroup
-}
+import { faceParameters } from "@/lib/face-parameters"
 
 export function ResultsPanel({ data }: { data: any }) {
-  const [tabIndex, setTabIndex] = useState(0)
-  const [areaIndex, setAreaIndex] = useState(0)
+  // Estados para gerenciar as seleções dos carrosséis
+  const [tabIndex, setTabIndex] = useState(0)          // Nível 1: Dropdown (Esqueleto, Pele, Preenchimento)
+  const [macroIndex, setMacroIndex] = useState(0)      // Nível 2: Macro-Região (Cabeça, Testa, Olhos...)
+  const [subTabIndex, setSubTabIndex] = useState(0)    // Nível 3: Sub-aba Real (Crânio, Têmporas, Órbitas...)
 
   const tab = faceParameters[tabIndex]
 
-  // components/results-panel.tsx - Linhas 65 a 68
-const areaOptions = useMemo<any[]>(() => {
-  const t = tab as any;
-  if (!t) return [];
+  // 1. Detecta o tipo de estrutura da Aba Pai selecionada de forma inteligente
+  const temMacroRegioes = useMemo(() => {
+    const t = tab as any
+    return !!(t && t.mainTabs && Array.isArray(t.mainTabs))
+  }, [tab])
 
-  // Se for o novo objeto envelopado (Categoria que contém mainTabs)
-  if (t.mainTabs && Array.isArray(t.mainTabs)) {
-    return t.mainTabs.flatMap((mainTab: any) =>
-      (mainTab.subTabs || []).flatMap((subTab: any) =>
-        (subTab.groups || []).map((group: any) => ({ subTab, group }))
-      )
-    );
-  }
+  // 2. Extrai as Macro-Regiões apenas se a categoria pai possuir essa camada (Ex: Esqueleto)
+  const macroRegions = useMemo(() => {
+    const t = tab as any
+    if (!t) return []
+    if (temMacroRegioes) return t.mainTabs
+    return []
+  }, [tab, temMacroRegioes])
 
-  // Se for o formato de Aba Direta (que contém subTabs)
-  if (t.subTabs && Array.isArray(t.subTabs)) {
-    return t.subTabs.flatMap((subTab: any) =>
-      (subTab.groups || []).map((group: any) => ({ subTab, group }))
-    );
-  }
+  const activeMacro = useMemo(() => {
+    if (macroRegions.length === 0) return undefined
+    return macroRegions[Math.min(macroIndex, macroRegions.length - 1)]
+  }, [macroRegions, macroIndex])
 
-  return [];
-}, [tab]);
+  // 3. Extrai as Sub-abas reais mudando o caminho dinamicamente conforme o tipo da Aba Pai
+  const subTabs = useMemo(() => {
+    const t = tab as any
+    if (!t) return []
+    if (temMacroRegioes) return activeMacro?.subTabs || []
+    return t.subTabs || []
+  }, [tab, temMacroRegioes, activeMacro])
 
+  const activeSubTab = useMemo(() => {
+    if (subTabs.length === 0) return undefined
+    return subTabs[Math.min(subTabIndex, subTabs.length - 1)]
+  }, [subTabs, subTabIndex])
 
-  const area = areaOptions.length > 0 ? areaOptions[Math.min(areaIndex, areaOptions.length - 1)] : undefined
+  // 4. Captura o grupo final que contém os sliders correspondentes
+  const activeGroup = useMemo(() => {
+    return activeSubTab?.groups || []
+  }, [activeSubTab])
 
+  // Reseta completamente os ponteiros das setas ao alternar o Dropdown da Aba Pai
   useEffect(() => {
-    setAreaIndex(0)
+    setMacroIndex(0)
+    setSubTabIndex(0)
   }, [tabIndex])
 
-  const cycleTab = (dir: 1 | -1) => {
-    setTabIndex((current) => (current + dir + faceParameters.length) % faceParameters.length)
+  // Reseta as sub-abas reais se a macro-região superior se mover
+  useEffect(() => {
+    setSubTabIndex(0)
+  }, [macroIndex])
+
+  const cycleMacro = (dir: 1 | -1) => {
+    if (macroRegions.length === 0) return
+    setMacroIndex((current) => (current + dir + macroRegions.length) % macroRegions.length)
   }
 
-  const cycleArea = (dir: 1 | -1) => {
-    setAreaIndex((current) => (current + dir + areaOptions.length) % areaOptions.length)
+  const cycleSubTab = (dir: 1 | -1) => {
+    if (subTabs.length === 0) return
+    setSubTabIndex((current) => (current + dir + subTabs.length) % subTabs.length)
   }
-
-  if (!data) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center p-8 text-center text-muted-foreground bg-secondary/10 rounded-xl border border-dashed border-border/50">
-        <div className="flex size-16 items-center justify-center rounded-full bg-secondary mb-4">
-          <span className="text-2xl">📊</span>
-        </div>
-        <h3 className="text-lg font-semibold text-foreground mb-2">Aguardando Análise</h3>
-        <p className="text-sm max-w-[260px]">
-          Faça o upload de uma foto e clique em gerar para ver os parâmetros do EA FC 26.
-        </p>
-      </div>
-    )
-  }
-
-  const activeArea = area ?? {
-    subTab: { id: "", label: "Sem dados", groups: [] },
-    group: { id: "", label: "Sem dados", sliders: [] },
-  }
-
-  const areaLabel = area
-    ? `${activeArea.subTab.label} · ${activeArea.group.label}`
-    : "Sem dados disponíveis"
-
   return (
-    <div className="flex h-full flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
+    // 🔒 TRAVA DE DESIGN: Altura imutável em h-[560px] mantém o espaço fixo igual ao seu print
+    <div className="flex flex-col gap-4 w-full h-[560px] select-none">
+      
+      {/* Cabeçalho do painel */}
+      <div className="flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-2">
           <Layers className="size-4 text-primary" />
           <div>
@@ -137,38 +88,139 @@ const areaOptions = useMemo<any[]>(() => {
         <Badge className="bg-primary/15 text-primary">IA pronta</Badge>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 rounded-2xl border border-border bg-card/80 p-3">
-        <Stepper
-          label={`${tab.label} (${tabIndex + 1}/${faceParameters.length})`}
-          onPrev={() => cycleTab(-1)}
-          onNext={() => cycleTab(1)}
-        />
+      {/* Caixa de Conteúdo Principal */}
+      <div className="flex flex-col flex-1 h-full gap-3 rounded-2xl border border-border bg-card/80 p-3 overflow-hidden">
+        
+        {/* Nível 1: Dropdown (Aba Pai) */}
+        <div className="w-full shrink-0">
+          <select
+            value={tabIndex}
+            onChange={(e) => setTabIndex(Number(e.target.value))}
+            className="w-full cursor-pointer rounded-lg border border-border bg-secondary/40 p-2 text-sm font-semibold text-foreground outline-none transition-colors focus:border-primary"
+          >
+            {faceParameters.map((item, idx) => (
+              <option key={item.id || idx} value={idx} className="bg-card text-foreground">
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
-        <Stepper
-          label={`${areaLabel} (${areaOptions.length > 0 ? areaIndex + 1 : 0}/${areaOptions.length})`}
-          onPrev={() => cycleArea(-1)}
-          onNext={() => cycleArea(1)}
-          indented
-        />
+        {/* CONTROLES CONDICIONAIS DE CARROSSEL (h-[88px] travado para estabilidade) */}
+        <div className="rounded-lg border border-border bg-secondary/60 p-3 h-[88px] min-h-[88px] flex flex-col justify-center gap-2 shrink-0">
+          
+          {/* Caso 1: A categoria tem Macro-Regiões (Ex: Esqueleto) */}
+          {temMacroRegioes && activeMacro ? (
+            <>
+              {/* Linha do Macro Carrossel */}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => cycleMacro(-1)}
+                  className="flex size-7 items-center justify-center rounded-md text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground active:scale-95"
+                >
+                  <ChevronLeft className="size-4" />
+                </button>
+                <span className="truncate px-2 text-center text-sm font-bold text-foreground min-w-[140px]">
+                  {activeMacro.label} ({macroIndex + 1}/{macroRegions.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => cycleMacro(1)}
+                  className="flex size-7 items-center justify-center rounded-md text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground active:scale-95"
+                >
+                  <ChevronRight className="size-4" />
+                </button>
+              </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-rounded scrollbar-track-transparent scrollbar-thumb-slate-700/40">
-          <div className="space-y-4 py-2">
-            {activeArea.group.sliders.map((slider: { id: string; label: string; default: number }) => {
-              const rawValue = data?.[tab.label]?.[activeArea.subTab.label]?.[activeArea.group.label]?.[slider.label]
-              const sliderValue = typeof rawValue === "number" ? rawValue : Number(rawValue ?? slider.default)
+              {/* Linha da Sub-aba Real Embutida e Ramificada */}
+              {subTabs.length > 0 && activeSubTab && (
+                <div className="relative pl-5 pt-1.5 border-t border-border/30 flex items-center justify-between">
+                  <span
+                    aria-hidden
+                    className="absolute top-1/2 left-0 size-3 -translate-y-1/2 rounded-bl-md border-b border-l border-border/70"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => cycleSubTab(-1)}
+                    className="flex size-6 items-center justify-center rounded-md text-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground active:scale-95"
+                  >
+                    <ChevronLeft className="size-3.5" />
+                  </button>
+                  <span className="truncate px-2 text-center text-xs font-semibold text-muted-foreground min-w-[140px]">
+                    {activeSubTab.label} ({subTabIndex + 1}/{subTabs.length})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => cycleSubTab(1)}
+                    className="flex size-6 items-center justify-center rounded-md text-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground active:scale-95"
+                  >
+                    <ChevronRight className="size-3.5" />
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            /* Caso 2: NÃO tem Macro-Região (Ex: Pele). Cria um único carrossel linear de Sub-abas */
+            subTabs.length > 0 && activeSubTab && (
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => cycleSubTab(-1)}
+                  className="flex size-7 items-center justify-center rounded-md text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground active:scale-95"
+                >
+                  <ChevronLeft className="size-4" />
+                </button>
+                <span className="truncate px-2 text-center text-sm font-bold text-foreground min-w-[140px]">
+                  {activeSubTab.label} ({subTabIndex + 1}/{subTabs.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => cycleSubTab(1)}
+                  className="flex size-7 items-center justify-center rounded-md text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground active:scale-95"
+                >
+                  <ChevronRight className="size-4" />
+                </button>
+              </div>
+            )
+          )}
+        </div>
+        {/* Título Fixo dos Sliders */}
+        <div className="pt-1 px-1 shrink-0">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-primary">
+            Parâmetros
+          </h4>
+        </div>
 
-              return (
-                <ParameterRow
-                  key={slider.id}
-                  slider={{ ...slider, defaultValue: slider.default }}
-                  overrideValue={sliderValue}
-                />
-              )
-            })}
+        {/* 🔒 Listagem Blindada: Mantém o espaço e impede oscilação do rodapé */}
+        <div className="flex-1 h-0 w-full overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-rounded scrollbar-track-transparent scrollbar-thumb-slate-700/40">
+          <div className="space-y-2 py-1">
+            {activeGroup?.map((group: any) =>
+              group?.sliders?.map((slider: { id: string; label: string; default: number }) => {
+                // Resgata com segurança o nó correto mapeado dinamicamente pelas chaves
+                const rawValue = data?.[tab.label]?.[activeSubTab?.label]?.[group.label]?.[slider.label]
+                const sliderValue = typeof rawValue === "number" ? rawValue : Number(rawValue ?? slider.default)
+
+                return (
+                  <ParameterRow
+                    key={slider.id}
+                    slider={{ ...slider, defaultValue: slider.default }}
+                    overrideValue={sliderValue}
+                  />
+                )
+              })
+            )}
+            
+            {(!activeGroup || activeGroup.length === 0) && (
+              <div className="flex h-full min-h-[200px] items-center justify-center text-center text-xs text-muted-foreground">
+                Nenhum parâmetro encontrado nesta seção.
+              </div>
+            )}
           </div>
         </div>
 
-        <p className="px-1 text-center text-[11px] text-muted-foreground">
+        {/* Rodapé Fixo */}
+        <p className="px-1 pt-1 text-center text-[11px] text-muted-foreground border-t border-border/20 shrink-0">
           Toque em um parâmetro para marcar como concluído
         </p>
       </div>
