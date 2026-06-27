@@ -193,6 +193,7 @@ const promptTexto = generateFaceAnalysisPrompt(sliderLabelsList);
 
 // 2. Passe a variável criada dentro de 'parts'
     // 1. CHAMADA BLINDADA DO GEMINI (Garante o uso correto das propriedades do SDK)
+       // 1. CHAMADA BLINDADA DO GEMINI
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [
@@ -209,23 +210,43 @@ const promptTexto = generateFaceAnalysisPrompt(sliderLabelsList);
           ],
         },
       ],
-      config: {
+      config: { // 👈 O bloco config começa aqui
         responseMimeType: 'application/json',
         temperature: 0.0,
-        // Garantimos que o SDK use a capacidade máxima de escrita do 2.5-Flash
         maxOutputTokens: 8192, 
-      },
+
+        // 🟢 ADICIONE ESTE BLOCO ABAIXO DO MAX OUTPUT TOKENS:
+        responseSchema: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: {
+              id: { type: "STRING" },
+              value: { type: "NUMBER" }
+            },
+            required: ["id", "value"]
+          }
+        }
+        // ----------------------------------------------------
+
+      }, // 👈 O bloco config termina aqui
     });
 
+
     // 2. FUNÇÃO MÁGICA DE AUTO-REPARO DE JSON CORTADO (Fallback de Segurança)
-    const repararJsonCortado = (jsonIncompleto: string): string => {
+        const repararJsonCortado = (jsonIncompleto: string): string => {
       let texto = jsonIncompleto.trim();
       
-      // Remove possíveis marcações de bloco de código markdown que a IA coloque
       texto = texto.replace(/```json/g, "").replace(/```/g, "").trim();
 
-      // Se o JSON já termina fechado corretamente, não faz nada
+      // 🔴 ADICIONE ESTA CORREÇÃO: Remove chaves truncadas no fim do texto (ex: ,"eb4": ou ,"eb4": )
+      texto = texto.replace(/,\s*"[^"]*"\s*:\s*$/, "");
+      texto = texto.replace(/"[^"]*"\s*:\s*$/, "");
+
       if (texto.endsWith("}") || texto.endsWith("]")) return texto;
+      
+      // ... restante da sua função de pilha continua exatamente igual ...
+
 
       console.warn("⚠️ ATENÇÃO: O Gemini cortou a resposta. Iniciando auto-reparo de colchetes/chaves...");
 
@@ -297,12 +318,33 @@ const promptTexto = generateFaceAnalysisPrompt(sliderLabelsList);
           }
         }
 
-        console.log("🔥 SUCESSO ABSOLUTO: Dados biométricos processados com sucesso no backend!");
+            // ... toda a chamada do Gemini e processamento dos dados que vimos antes ...
 
-      } catch (err) {
-        console.error("⚠️ Erro crítico na chamada estruturada do Gemini:", err);
+    console.log("🔥 SUCESSO ABSOLUTO: Dados biométricos processados com sucesso no backend!");
+
+    // Retorno de SUCESSO da rota (quando tudo dá certo)
+    return NextResponse.json({
+      characterData: flatSlidersMap, // ou a variável que guarda os dados tratados
+      meta: {
+        confidences: confidencesMap,
+        missingKeys: missingKeys
       }
-    } // Fim do bloco else (MOCK_MODE)
+    });
+
+  } catch (err) {
+    console.error("⚠️ Erro crítico na chamada estruturada do Gemini:", err);
+    
+    // 🔴 ISSO EVITA O ERRO 500 EM BRANCO: Se a IA falhar, a API avisa o Front-end explicitamente
+    return NextResponse.json(
+      { 
+        error: "Falha ao processar os parâmetros faciais com o Gemini.", 
+        detalhes: String(err) 
+      }, 
+      { status: 500 }
+    );
+  }
+}
+
 
 
 
