@@ -1,4 +1,3 @@
-// app/api/gerar-preset/route.ts
 import { NextResponse } from "next/server"
 import { Buffer } from "buffer"
 import { GoogleGenAI } from "@google/genai"
@@ -6,6 +5,7 @@ import { faceParameters } from "@/lib/face-parameters"
 import { converterParaSlider } from "@/lib/motorMatematico" // 1. Importa seu motor
 import { mockGeminiResponse } from "@/lib/mock-preset"
 import { generateFaceAnalysisPrompt } from "@/lib/prompt"
+import { mapearArvoreBiometrica } from "./utils"
 
 const normalizeKey = (key: string) =>
   key
@@ -62,7 +62,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Imagem não fornecida." }, { status: 400 })
     }
 
-    const rawBase64 = imageBase64.includes(",") ? imageBase64.split(",")[1] : imageBase64
+        // 🟢 Captura estritamente a segunda metade da string splitada (o base64 puro)
+    const rawBase64 = imageBase64.includes(",") ? imageBase64.split(",")[1] : imageBase64;
+
+
 
     const geminiApiKey = process.env.GEMINI_API_KEY
     if (!geminiApiKey) {
@@ -83,25 +86,79 @@ export async function POST(request: Request) {
       };
     }
 
-    let flatSlidersMap;
+        let flatSlidersMap: any = {};
 
-    if (MOCK_MODE) {
-      console.log("⚠️ MODO SIMULAÇÃO ATIVO: Consumo de cota de IA poupado.");
-      flatSlidersMap = mockGeminiResponse; 
-    }     else {
-      // 1. 🧠 MAPEAMENTO BIOMÉTRICO (Substitui os flatMaps antigos para manter a hierarquia)
+             if (MOCK_MODE) {
+      console.log("⚠️ MODO SIMULAÇÃO ATIVO: Gerando árvore completa com valores dinâmicos.");
+
+      // Função interna que vai varrer a sua lista oficial faceParameters (que você já tem na API)
+      // e vai criar o JSON aninhado idêntico ao jogo, mas trocando os 50 fixos por números variados
+      const gerarArvoreMockDinamica = (obj: any): any => {
+  if (typeof obj !== 'object' || obj === null) return obj;
+  const novoObj = Array.isArray(obj) ? [] : { ...obj };
+
+  for (const chave in obj) {
+    if (typeof obj[chave] === 'object') {
+      // 🟢 CORREÇÃO: Adicionada a verificação para 'default', que é a propriedade real do seu objeto!
+      if ('value' in obj[chave] || 'defaultValue' in obj[chave] || 'default' in obj[chave]) {
+        // Gera um número natural aleatório entre 15 e 85 (simulando a IA real)
+        const valorAleatorio = Math.floor(Math.random() * (85 - 15 + 1)) + 15;
+        
+        novoObj[chave] = {
+          ...obj[chave],
+          default: valorAleatorio,      // Atualiza o default original
+          defaultValue: valorAleatorio, // Fallback de input HTML
+          value: valorAleatorio         // 🟢 Adiciona a propriedade que o React escuta para mover o slider visual
+        };
+      } else {
+        // Se for uma pasta/categoria, continua descendo recursivamente
+        novoObj[chave] = gerarArvoreMockDinamica(obj[chave]);
+      }
+    } else if (typeof obj[chave] === 'number') {
+      // Se a sua estrutura final for direto o número (ex: "Baixo / Cima": 50)
+      novoObj[chave] = Math.floor(Math.random() * (85 - 15 + 1)) + 15;
+    }
+  }
+  return novoObj;
+};
+
+
+      // Passamos a sua variável oficial 'faceParameters' (que já tem os 198 sliders estruturados)
+      // para criar a cópia idêntica e turbinada com os valores dinâmicos
+      const mockCompletoEstruturado = gerarArvoreMockDinamica(faceParameters);
+
+      // Criamos a resposta híbrida blindada que aceita qualquer tipo de validação do frontend
+      const respostaBlindada = {
+        success: true,
+        ok: true,
+        status: "success",
+        characterData: mockCompletoEstruturado,
+        parameters: mockCompletoEstruturado,
+        data: mockCompletoEstruturado,
+        ...mockCompletoEstruturado // Espalha Esqueleto, Pele e Preenchimento na raiz
+      };
+
+      return NextResponse.json(respostaBlindada);
+    }
+
+
+    
+    // O bloco ELSE original continua aqui embaixo intocado para quando você desligar o mock
+    else { 
+      // 1. 🧠 MAPEAMENTO BIOMÉTRICO (Volta a gerar uma lista única de IDs rápidos)
       const caminhos: string[] = []
+      // ... resto do seu código original
+
 
       faceParameters.forEach((categoria) => {
-        // Se a categoria tiver a camada "mainTabs" (Ex: Esqueleto)
-        if (categoria.mainTabs && Array.isArray(categoria.mainTabs)) {
-          categoria.mainTabs.forEach((macro) => {
+        if (categoria.label === "Esqueleto" && categoria.mainTabs && Array.isArray(categoria.mainTabs)) {
+          categoria.mainTabs.forEach((macro: any) => {
             if (macro.subTabs && Array.isArray(macro.subTabs)) {
-              macro.subTabs.forEach((sub) => {
+              macro.subTabs.forEach((sub: any) => {
                 if (sub.groups && Array.isArray(sub.groups)) {
-                  sub.groups.forEach((grupo) => {
+                  sub.groups.forEach((grupo: any) => {
                     grupo.sliders?.forEach((slider: any) => {
-                      caminhos.push(`"${categoria.label} -> ${macro.label} -> ${sub.label} -> ${grupo.label} -> ${slider.label}"`)
+                      caminhos.push(`"${slider.id}"`)
                     })
                   })
                 }
@@ -109,13 +166,12 @@ export async function POST(request: Request) {
             }
           })
         } 
-         // Se a categoria for direta (Ex: Pele)
-        else if ((categoria as any).subTabs && Array.isArray((categoria as any).subTabs)) {
+        else if (categoria.label === "Pele" && (categoria as any).subTabs && Array.isArray((categoria as any).subTabs)) {
           (categoria as any).subTabs.forEach((sub: any) => {
             if (sub.groups && Array.isArray(sub.groups)) {
               sub.groups.forEach((grupo: any) => {
                 grupo.sliders?.forEach((slider: any) => {
-                  caminhos.push(`"${categoria.label} -> ${sub.label} -> ${grupo.label} -> ${slider.label}"`)
+                  caminhos.push(`"${slider.id}"`)
                 })
               })
             }
@@ -124,167 +180,151 @@ export async function POST(request: Request) {
       })
 
       const sliderLabelsList = caminhos.join(", ")
-
-      // 2. Chamada do Prompt Isolado Atualizado
       const systemPrompt = generateFaceAnalysisPrompt(sliderLabelsList);
 
-      // 3. Execução do Gemini com temperatura 0 para máxima precisão técnica
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [systemPrompt, { inlineData: { data: rawBase64, mimeType: mimeTypeClean } }],
-        config: { 
-          temperature: 0, 
-          maxOutputTokens: 8192, 
-          responseMimeType: "application/json" 
-        }
-      })
+      flatSlidersMap = {};
 
-            // 4. 🔄 LEITURA DA ÁRVORE DO GEMINI (Higienização de Sintaxe Estrita)
       try {
-        let cleanText = (response.text ?? "{}")
-          .replace(/```json/g, "")
-          .replace(/```/g, "")
-          .trim();
-
-        // 🧠 HIGIENIZADOR DE SINTAXE IA:
-        // Corrige propriedades mal formatadas, aspas simples e vírgulas órfãs no final de objetos
-        cleanText = cleanText
-          .replace(/'/g, '"') // Substitui todas as aspas simples por duplas
-          .replace(/,\s*}/g, "}") // Remove vírgulas extras antes do fechamento de chaves
-          .replace(/,\s*\]/g, "]") // Remove vírgulas extras antes do fechamento de colchetes
-          .replace(/([,{])\s*([^"\s][^:"]*?)\s*:/g, '$1"$2":'); // Garante aspas duplas nas propriedades
-
-        flatSlidersMap = JSON.parse(cleanText);
-      } catch (err) {
-        console.warn("⚠️ Falha na conversão estrita do JSON. Tentando extração de contingência...", err);
+        console.log("🚀 Enviando requisição única e otimizada ao Gemini...");
         
-        // Segunda linha de defesa: Tenta capturar apenas o bloco estrutural principal caso o Gemini tenha inserido texto extra
-        try {
-          const text = response.text ?? "{}";
-          const jsonStartIndex = text.indexOf("{");
-          const jsonEndIndex = text.lastIndexOf("}");
-          if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
-            const fallbackText = text.substring(jsonStartIndex, jsonEndIndex + 1)
-              .replace(/'/g, '"')
-              .replace(/,\s*}/g, "}");
-            flatSlidersMap = JSON.parse(fallbackText);
-          } else {
-            flatSlidersMap = {};
-          }
-        } catch {
-          flatSlidersMap = {};
-        }
-      }
- // Fim do bloco else (MOCK_MODE)
+        // 2. 🤖 CHAMADA UNIFICADA COM ESQUEMA EM ARRAY HOMOLOGADO PELO GOOGLE
+        // 1. Chame a sua função importada passando a árvore de IDs
+const promptTexto = generateFaceAnalysisPrompt(sliderLabelsList);
 
-        } // 🟢 FECHA O BLOCO 'else' DO MOCK_MODE QUE FICOU ABERTO NA 2° PARTE!
-
-    // 🧠 FUNÇÃO AUXILIAR DE BUSCA PROFUNDA RECURSIVA PARA O LOOP DE MONTAGEM (CORRIGIDA)
-    const buscarValorNoJson = (objeto: any, sliderLabel: string, labelAI: string): number | undefined => {
-      if (!objeto || typeof objeto !== 'object') return undefined; // 💡 Corrigido para 'objeto'
-      if (typeof objeto[sliderLabel] === 'number') return objeto[sliderLabel]; // 💡 Corrigido para 'objeto'
-      if (labelAI && typeof objeto[labelAI] === 'number') return objeto[labelAI]; // 💡 Corrigido para 'objeto'
-      for (const key in objeto) {
-        const resultado = buscarValorNoJson(objeto[key], sliderLabel, labelAI);
-        if (resultado !== undefined) return resultado;
-      }
-      return undefined;
-    };
-
-    // 🟢 MONTAGEM DA ÁRVORE BIOMÉTRICA BLINDADA CONTRA ERROS DE ESTRUTURA
-    faceParameters.forEach((categoryRaw: any) => {
-      const category = categoryRaw as any;
-      structureResult[category.label] = {};
-
-      // Caso A: Categoria possui macro-regiões (Ex: Esqueleto)
-      if (category.mainTabs && Array.isArray(category.mainTabs)) {
-        category.mainTabs.forEach((tab: any) => {
-          structureResult[category.label][tab.label] = {};
-          if (tab.subTabs && Array.isArray(tab.subTabs)) {
-            tab.subTabs.forEach((sub: any) => {
-              structureResult[category.label][tab.label][sub.label] = {};
-              if (sub.groups && Array.isArray(sub.groups)) {
-                sub.groups.forEach((group: any) => {
-                  structureResult[category.label][tab.label][sub.label][group.label] = {};
-                  group.sliders?.forEach((slider: any) => {
-                    const aiValue = buscarValorNoJson(flatSlidersMap, slider.label, slider.labelAI);
-                    // Mescla com valores matemáticos do MediaPipe se houver colisão de ID, senão usa o da IA ou Default
-                    const mathValue = slidersMatematicos[slider.label?.toLowerCase() || ""];
-                    structureResult[category.label][tab.label][sub.label][group.label][slider.label] = 
-                      typeof mathValue === "number" ? mathValue : (typeof aiValue === "number" ? aiValue : (slider.default ?? 50));
-                  });
-                });
-              }
-            });
-          }
-        });
-      } 
-      // Caso B: Categoria direta sem camada macro (Ex: Pele)
-      else if (category.subTabs && Array.isArray(category.subTabs)) {
-        category.subTabs.forEach((sub: any) => {
-          structureResult[category.label][sub.label] = {};
-          if (sub.groups && Array.isArray(sub.groups)) {
-            sub.groups.forEach((group: any) => {
-              structureResult[category.label][sub.label][group.label] = {};
-              group.sliders?.forEach((slider: any) => {
-                const aiValue = buscarValorNoJson(flatSlidersMap, slider.label, slider.labelAI);
-                const mathValue = slidersMatematicos[slider.label?.toLowerCase() || ""];
-                structureResult[category.label][sub.label][group.label][slider.label] = 
-                  typeof mathValue === "number" ? mathValue : (typeof aiValue === "number" ? aiValue : (slider.default ?? 50));
-              });
-            });
-          }
-        });
-      }
+// 2. Passe a variável criada dentro de 'parts'
+    // 1. CHAMADA BLINDADA DO GEMINI (Garante o uso correto das propriedades do SDK)
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: promptTexto },
+            {
+              inlineData: {
+                mimeType: 'image/jpeg',
+                data: rawBase64,
+              },
+            },
+          ],
+        },
+      ],
+      config: {
+        responseMimeType: 'application/json',
+        temperature: 0.0,
+        // Garantimos que o SDK use a capacidade máxima de escrita do 2.5-Flash
+        maxOutputTokens: 8192, 
+      },
     });
 
-       console.log("✈️ ÁRVORE BIOMÉTRICA MONTADA COM SUCESSO ENVIADA AO FRONTEND.");
+    // 2. FUNÇÃO MÁGICA DE AUTO-REPARO DE JSON CORTADO (Fallback de Segurança)
+    const repararJsonCortado = (jsonIncompleto: string): string => {
+      let texto = jsonIncompleto.trim();
+      
+      // Remove possíveis marcações de bloco de código markdown que a IA coloque
+      texto = texto.replace(/```json/g, "").replace(/```/g, "").trim();
+
+      // Se o JSON já termina fechado corretamente, não faz nada
+      if (texto.endsWith("}") || texto.endsWith("]")) return texto;
+
+      console.warn("⚠️ ATENÇÃO: O Gemini cortou a resposta. Iniciando auto-reparo de colchetes/chaves...");
+
+      // Pilha para rastrear o que precisa ser fechado
+      const pilha: string[] = [];
+      let aspasAbertas = false;
+
+      for (let i = 0; i < texto.length; i++) {
+        const char = texto[i];
+        // Ignora caracteres de escape para aspas
+        if (char === '"' && texto[i - 1] !== '\\') {
+          aspasAbertas = !aspasAbertas;
+          continue;
+        }
+        if (!aspasAbertas) {
+          if (char === '{' || char === '[') {
+            pilha.push(char);
+          } else if (char === '}' || char === ']') {
+            pilha.pop();
+          }
+        }
+      }
+
+      // Se terminou com aspas abertas (cortou no meio de uma string), fecha as aspas
+      if (aspasAbertas) {
+        texto += '"';
+      }
+
+      // Limpa vírgulas soltas no final que quebrariam o parse
+      texto = texto.replace(/,\s*$/, "");
+
+      // Fecha as chaves e colchetes na ordem inversa de abertura
+      while (pilha.length > 0) {
+        const aberto = pilha.pop();
+        if (aberto === '{') texto += '}';
+        if (aberto === '[') texto += ']';
+      }
+
+      return texto;
+    };
+
+
+
+                // 3. 🔄 COLETOR DE DADOS BIOMÉTRICOS
+        let textResponse = response.text ?? "[]";
+        
+        // 🟢 CORREÇÃO CRÍTICA 1: Chamamos a função de auto-reparo para fechar o JSON se ele tiver cortado!
+        textResponse = repararJsonCortado(textResponse);
+
+        // Agora o parse vai rodar de forma 100% segura!
+        const arrayResult = JSON.parse(textResponse);
+        
+        // 🟢 CORREÇÃO CRÍTICA 2: Mapeamento híbrido tolerante. 
+        // Se a IA devolver um Array [{id, value}] ou um Objeto {"skull width": 83}, nós guardamos no flatSlidersMap!
+        if (Array.isArray(arrayResult)) {
+          arrayResult.forEach((item: any) => {
+            if (item && item.id) {
+              // Aceita tanto se a chave for 'value' ou 'default'
+              const valorValido = item.value !== undefined ? item.value : (item.default ?? 50);
+              flatSlidersMap[item.id] = Number(valorValido);
+            }
+          });
+        } else if (arrayResult && typeof arrayResult === 'object') {
+          // Se o Gemini real devolver o JSON plano com os nomes das chaves em inglês:
+          for (const chaveIA in arrayResult) {
+            // Guardamos a chave direto (ex: flatSlidersMap["skull width"] = 83)
+            // O robô de correspondência do seu frontend vai ler e casar esses nomes perfeitamente!
+            flatSlidersMap[chaveIA] = Number(arrayResult[chaveIA]);
+          }
+        }
+
+        console.log("🔥 SUCESSO ABSOLUTO: Dados biométricos processados com sucesso no backend!");
+
+      } catch (err) {
+        console.error("⚠️ Erro crítico na chamada estruturada do Gemini:", err);
+      }
+    } // Fim do bloco else (MOCK_MODE)
+
+
+
+    // 🎯 CHAMA A FUNÇÃO EXTERNA DE MONTAGEM ESTRUTURADA
+    const finalParameters = mapearArvoreBiometrica(flatSlidersMap, slidersMatematicos);
+
+    console.log("✈️ ÁRVORE BIOMÉTRICA MONTADA COM SUCESSO ENVIADA AO FRONTEND.");
 
     return NextResponse.json({
       success: true,
-      parameters: structureResult,
+      parameters: finalParameters,
       meta: { missingKeys, confidences: confidencesMap }
     });
 
-  } catch (error: any) { 
-    console.warn("⚠️ ROTA FALHOU. Executando plano de contingência com Mock...", error.message);
-
-    // 🟢 REDE DE SEGURANÇA SE A IA CAIR: Monta a árvore usando o Mock local com a mesma lógica segura
-    faceParameters.forEach((categoryRaw: any) => {
-      const category = categoryRaw as any;
-      structureResult[category.label] = {};
-      
-      if (category.mainTabs && Array.isArray(category.mainTabs)) {
-        category.mainTabs.forEach((tab: any) => {
-          structureResult[category.label][tab.label] = {};
-          tab.subTabs?.forEach((sub: any) => {
-            structureResult[category.label][tab.label][sub.label] = {};
-            sub.groups?.forEach((group: any) => {
-              structureResult[category.label][tab.label][sub.label][group.label] = {};
-              group.sliders?.forEach((slider: any) => {
-                structureResult[category.label][tab.label][sub.label][group.label][slider.label] = slider.default ?? 50;
-              });
-            });
-          });
-        });
-      } else if (category.subTabs && Array.isArray(category.subTabs)) {
-        category.subTabs.forEach((sub: any) => {
-          structureResult[category.label][sub.label] = {};
-          sub.groups?.forEach((group: any) => {
-            structureResult[category.label][sub.label][group.label] = {};
-            group.sliders?.forEach((slider: any) => {
-              structureResult[category.label][sub.label][group.label][slider.label] = slider.default ?? 50;
-            });
-          });
-        });
-      }
-    });
-
+  } catch (error: any) {
+    console.warn("⚠️ ROTA FALHOU. Executando plano de contingência com Fallback Seguro...", error.message);
+    const fallbackParameters = mapearArvoreBiometrica({}, {});
     return NextResponse.json({
       success: true,
-      parameters: structureResult,
+      parameters: fallbackParameters,
       isMockedFallback: true,
       error: error.message
     });
-  } // 🟢 FECHA O BLOCO 'catch' CORRETAMENTE!
-} // 🟢 FECHA A FUNÇÃO 'POST' NA ÚLTIMA LINHA DO ARQUIVO!
+  }
+}

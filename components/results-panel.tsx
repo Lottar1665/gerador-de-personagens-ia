@@ -17,7 +17,19 @@ export function ResultsPanel({ data }: { data: any }) {
   const [macroIndex, setMacroIndex] = useState(0)      // Nível 2: Macro-Região (Cabeça, Testa, Olhos...)
   const [subTabIndex, setSubTabIndex] = useState(0)    // Nível 3: Sub-aba Real (Crânio, Têmporas, Órbitas...)
 
-  const tab = faceParameters[tabIndex]
+  // 🟢 CORREÇÃO MESTRE: Fazemos o painel ler de forma reativa os dados da IA (data) se existirem,
+  // caindo no modelo estático de fábrica (faceParameters) apenas quando a página acaba de abrir.
+  const tab = useMemo(() => {
+    if (data && typeof data === 'object') {
+      // Converte o objeto { Esqueleto, Pele, Preenchimento } em um array indexável para os carrosséis
+      const listaAbasDinamicas = [data.Esqueleto, data.Pele, data.Preenchimento].filter(Boolean);
+      if (listaAbasDinamicas.length > 0) {
+        return listaAbasDinamicas[tabIndex];
+      }
+    }
+    // Fallback inicial se não houver dados da IA ainda
+    return faceParameters?.[tabIndex];
+  }, [data, tabIndex]);
 
   // 1. Detecta o tipo de estrutura da Aba Pai selecionada de forma inteligente
   const temMacroRegioes = useMemo(() => {
@@ -76,6 +88,7 @@ export function ResultsPanel({ data }: { data: any }) {
     if (subTabs.length === 0) return
     setSubTabIndex((current) => (current + dir + subTabs.length) % subTabs.length)
   }
+
     return (
     // 🔒 TRAVA DE DESIGN: Altura imutável em h-[560px] mantém o espaço fixo igual ao seu print
     <div className="flex flex-col gap-4 w-full h-[560px] select-none">

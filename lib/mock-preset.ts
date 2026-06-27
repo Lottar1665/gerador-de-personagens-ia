@@ -1,8 +1,8 @@
 // src/lib/mock-preset.ts
 export const mockGeminiResponse = {
-  "skull width": 55,
+  "skull width": 50,
   "skull height": 50,
-  "temple morphology": 25,
+  "temple morphology": 50,
   "eyebrow center height": 50,
   "eyebrow center thickness": 16,
   "interbrow distance": 73,

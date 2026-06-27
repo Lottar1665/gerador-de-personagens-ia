@@ -14,15 +14,15 @@ const VALID_TABS = ["dashboard", "community", "meus"] as const
 
 type TabValue = (typeof VALID_TABS)[number]
 
-export default function DashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> })
-{
+export default function DashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const params = use(searchParams) 
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // 🟢 CORREÇÃO: Mudado o fallback de "generate" para "dashboard" para coincidir com a chave real do seu TabsContent
   const initialTab = VALID_TABS.includes((params?.tab || "") as TabValue)
     ? (params?.tab as TabValue)
-    : "generate"
+    : "dashboard"
 
   useEffect(() => {
     if (!auth) {

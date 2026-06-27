@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react"
 import { Upload, Wand2, X } from "lucide-react"
+import { useEffect } from "react"
+
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -20,6 +22,9 @@ function UploadArea({ onFileSelect }: { onFileSelect: (file: File | null) => voi
   const [dragging, setDragging] = useState(false)
   const [fileName, setFileName] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const [resultadoIA, setResultadoIA] = useState<any>(null)
+  const [generationId, setGenerationId] = useState(0)
+
 
   const handleFileChange = (file: File | null) => {
     setFileName(file ? file.name : null)
@@ -151,52 +156,169 @@ function InputZone({
     }
   }
 
-    const handleGerarParametros = async () => {
+        const handleGerarParametros = async () => {
     if (!imagemSelecionada) {
-      alert("Por favor, selecione ou envie uma foto primeiro.")
-      return
+      alert("Por favor, selecione uma imagem antes de gerar.");
+      return;
     }
-    setIsLoading(true)
-    try {
-      const base64String = await createPreviewDataUrl(imagemSelecionada)
-      
-      // 🟢 CORREÇÃO 1: Aponta para a rota unificada /api/gerar-preset que montamos
-      const response = await fetch("/api/gerar-face", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageBase64: base64String,
-          mimeType: imagemSelecionada.type || "image/jpeg",
-          landmarksFrente: (window as any).landmarksFrente || [] // 🟢 Envia landmarks se existirem no escopo global
-        }),
-      })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Falha na requisição da API.")
+        try {
+      setIsLoading(true);
+
+      // 1. Processa a imagem para converter em DataURL do navegador
+      const fullBase64 = await createPreviewDataUrl(imagemSelecionada);
+
+      // 🟢 CORREÇÃO CRÍTICA: Remove o prefixo "data:image/jpeg;base64," para enviar apenas o Base64 binário puro
+      const cleanBase64 = fullBase64.includes(",") ? fullBase64.split(",")[1] : fullBase64;
+
+      // 🟢 COMPACTAÇÃO GEOMÉTRICA (OPCIONAL): Captura apenas as distâncias resumidas 
+      // do objeto global se o MediaPipe tiver rodado na tela, sem mandar os 468 pontos brutos.
+      let resumoMatematico = {};
+      if ((window as any).landmarksFrenteAtual && (window as any).landmarksFrenteAtual.length > 0) {
+        const pts = (window as any).landmarksFrenteAtual;
+        const dist3D = (p1: any, p2: any) => Math.sqrt(Math.pow(p1.x-p2.x,2) + Math.pow(p1.y-p2.y,2) + Math.pow(p1.z-p2.z,2));
+        const base = dist3D(pts[133], pts[362]); // Distância padrão entre os cantos internos dos olhos
+        
+        resumoMatematico = {
+          maxilar_largura: (dist3D(pts[172], pts[397]) / base).toFixed(2),
+          nariz_largura: (dist3D(pts[61], pts[291]) / base).toFixed(2),
+          boca_largura: (dist3D(pts[57], pts[287]) / base).toFixed(2),
+          testa_altura: (dist3D(pts[70], pts[159]) / base).toFixed(2)
+        };
       }
 
-      const data = await response.json()
-      
-      // 🟢 CORREÇÃO 2: Valida tanto o data.parameters quanto a propriedade de sucesso do backend
-      if (data && data.parameters) {
-        onParametrosGerados(data.parameters)
-        
-        if (postToCommunity) {
-          await saveCommunityPost(data.parameters)
+      // 2. Faz a chamada para a API enviando apenas o essencial (Limpo e Otimizado)
+      const response = await fetch('/api/gerar-face', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          imageBase64: cleanBase64, 
+          mimeType: "image/jpeg",
+          mediaPipeData: resumoMatematico // 👈 Enviamos dados biométricos pesando menos de 100 caracteres!
+        })
+      });
+
+      const data = await response.json();
+      // ... todo o restante do seu código estruturado de caminhos A, B e C continua igual abaixo ...
+
+
+      // 1. Captura a lista ou objeto que veio da API
+      const resultadoDaAPI = data.characterData || data.data || data;
+
+      // 2. CAMINHO A: Se a resposta for um ARRAY estruturado (Padrão do seu Mock Local)
+      if (Array.isArray(resultadoDaAPI) && resultadoDaAPI.length > 0) {
+        const esqueletoNode = resultadoDaAPI.find((item: any) => item?.id === "esqueleto" || item?.label === "Esqueleto");
+        const peleNode = resultadoDaAPI.find((item: any) => item?.id === "pele" || item?.label === "Pele");
+        const preenchimentoNode = resultadoDaAPI.find((item: any) => item?.id === "preenchimento" || item?.label === "Preenchimento") || { id: "preenchimento", label: "Preenchimento", mainTabs: [] };
+
+        if (esqueletoNode && peleNode) {
+          const objetoFormatado = {
+            Esqueleto: esqueletoNode,
+            Pele: peleNode,
+            Preenchimento: preenchimentoNode
+          };
+
+          onParametrosGerados(objetoFormatado);
+          if (postToCommunity) await saveCommunityPost(objetoFormatado);
+          alert("Parâmetros faciais gerados e aplicados com sucesso!");
+        } else {
+          console.log("❌ Falha interna: não encontrou as abas dentro do array", resultadoDaAPI);
+          throw new Error("Abas obrigatórias não encontradas no retorno.");
         }
+      } 
+      // 3. CAMINHO B: Se a resposta for um OBJETO PLANO em inglês (Padrão da IA Real do Gemini)
+      else if (resultadoDaAPI && typeof resultadoDaAPI === 'object' && !resultadoDaAPI.Esqueleto) {
         
-        alert("Parâmetros faciais gerados e aplicados com sucesso!")
-      } else {
-        throw new Error("A IA processou a imagem, mas não retornou a estrutura de parâmetros válida.")
-      }
-    } catch (error: any) {
-      console.error("Erro ao gerar parâmetros:", error)
-      alert(error.message || "Erro ao processar imagem com o Gemini.")
-    } finally {
-      setIsLoading(false)
+        // Função recursiva interna que varre o template padrão e injeta os valores da IA por proximidade de nome
+        const preencherValoresDaIA = (objetoAtual: any, caminhoAcumulado: string[] = []): any => {
+          if (typeof objetoAtual !== 'object' || objetoAtual === null) return objetoAtual;
+          const novaEstrutura = Array.isArray(objetoAtual) ? [] : { ...objetoAtual };
+
+          for (const chave in objetoAtual) {
+            const valorAtual = objetoAtual[chave];
+            const novoCaminho = [...caminhoAcumulado, chave].map(c => c.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, ""));
+
+            // Localize este trecho dentro da função preencherValoresDaIA:
+if (typeof valorAtual === 'number') {
+  let valorEncontrado = 50;
+  for (const chaveIA in resultadoDaAPI) {
+    const chaveIALimpa = chaveIA.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (novoCaminho.some(t => chaveIALimpa.includes(t) || t.includes(chaveIALimpa))) {
+      const num = Number(resultadoDaAPI[chaveIA]);
+      // 🟢 CORREÇÃO: Se a conversão falhar ou der NaN, garante o fallback 50
+      valorEncontrado = isNaN(num) ? 50 : num;
+      break;
     }
   }
+  novaEstrutura[chave] = valorEncontrado;
+} else if (valorAtual && typeof valorAtual === 'object') {
+  if ('id' in valorAtual || 'value' in valorAtual || 'default' in valorAtual) {
+    let valorEncontrado = valorAtual.default ?? valorAtual.value ?? 50;
+    const termosSlider = [...novoCaminho, (valorAtual.id || "").toLowerCase(), (valorAtual.labelAI || "").toLowerCase().replace(/[^a-z0-9 ]/g, "")];
+    
+    for (const chaveIA in resultadoDaAPI) {
+      const chaveIALimpa = chaveIA.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (termosSlider.some(t => t && (chaveIALimpa.includes(t) || t.includes(chaveIALimpa)))) {
+        const num = Number(resultadoDaAPI[chaveIA]);
+        // 🟢 CORREÇÃO: Garante o fallback 50 se o número extraído da IA for inválido
+        valorEncontrado = isNaN(num) ? 50 : num;
+        break;
+      }
+    }
+
+    novaEstrutura[chave] = {
+      ...valorAtual,
+      default: isNaN(valorEncontrado) ? 50 : valorEncontrado,
+      defaultValue: isNaN(valorEncontrado) ? 50 : valorEncontrado,
+      value: isNaN(valorEncontrado) ? 50 : valorEncontrado
+    };
+  } else {
+    novaEstrutura[chave] = preencherValoresDaIA(valorAtual, novoCaminho);
+  }
+}
+
+          }
+          return novaEstrutura;
+        };
+
+        const templateBase = resultadoIA && Object.keys(resultadoIA).length > 0 ? resultadoIA : {};
+        
+        if (Object.keys(templateBase).length > 0) {
+          const arvoreTraduzidaPeloGemini = preencherValoresDaIA(templateBase);
+          onParametrosGerados(arvoreTraduzidaPeloGemini);
+          if (postToCommunity) await saveCommunityPost(arvoreTraduzidaPeloGemini);
+          alert("Parâmetros reais do Gemini traduzidos e aplicados com sucesso!");
+        } else {
+          onParametrosGerados(resultadoDaAPI);
+          alert("Parâmetros aplicados diretamente!");
+        }
+      }
+      // 4. CAMINHO C: Se já vier no formato aninhado final { Esqueleto: ... } (Segurança extra)
+      else if (resultadoDaAPI && (resultadoDaAPI.Esqueleto || resultadoDaAPI.esqueleto)) {
+        const objetoFormatado = {
+          Esqueleto: resultadoDaAPI.Esqueleto || resultadoDaAPI.esqueleto,
+          Pele: resultadoDaAPI.Pele || resultadoDaAPI.pele,
+          Preenchimento: resultadoDaAPI.Preenchimento || resultadoDaAPI.preenchimento || { mainTabs: [] }
+        };
+        onParametrosGerados(objetoFormatado);
+        if (postToCommunity) await saveCommunityPost(objetoFormatado);
+        alert("Parâmetros faciais estruturados aplicados com sucesso!");
+      }
+      else {
+        console.log("❌ Falha na validação. O formato que chegou foi este:", data);
+        throw new Error("A IA processou a imagem, mas não retornou a estrutura de parâmetros válida.");
+      }
+
+    } catch (error) {
+      console.error("Erro ao gerar parâmetros:", error);
+      alert("Ocorreu um erro ao processar os parâmetros faciais.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
+
 
 
   return (
@@ -269,11 +391,27 @@ export function Dashboard({
   initialTab?: string
 }) {
   const [resultadoIA, setResultadoIA] = useState<any>(null)
+  const [generationId, setGenerationId] = useState(0)
+  
+  // 🟢 CORREÇÃO 1: Controla a aba ativamente por estado do React
+  const [activeTab, setActiveTab] = useState<string>(initialTab)
+
+  // 🟢 CORREÇÃO 2: Escuta mudanças vindas da URL (?tab=) e sincroniza a aba na tela
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab)
+    }
+  }, [initialTab])
 
   return (
     <div className="flex min-h-screen flex-col">
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
-        <Tabs defaultValue={initialTab} className="h-full">
+        {/* 🟢 CORREÇÃO 3: Trocado 'defaultValue' por 'value' e amarrado ao 'onValueChange' */}
+        <Tabs 
+          value={activeTab} 
+          onValueChange={(val) => setActiveTab(val)} 
+          className="h-full"
+        >
 
           {/* TabsList oculta — a navbar já faz a navegação via ?tab= */}
           <TabsList className="hidden">
@@ -287,7 +425,10 @@ export function Dashboard({
             <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
               <div className="lg:h-[calc(100vh-7rem)]">
                 <InputZone
-                  onParametrosGerados={setResultadoIA}
+                  onParametrosGerados={(dados) => {
+                    setResultadoIA(dados)
+                    setGenerationId(prev => prev + 1) // Força a mudança do ID de geração
+                  }}
                   resultadoIA={resultadoIA}
                   userEmail={user.email}
                   userName={user.displayName}
@@ -296,7 +437,8 @@ export function Dashboard({
               </div>
               <Card className="border-border bg-card lg:h-[calc(100vh-7rem)]">
                 <CardContent className="h-full overflow-hidden">
-                  <ResultsPanel data={resultadoIA} />
+                  {/* Injeta a key dinâmica para forçar a re-renderização imediata na tela */}
+                  <ResultsPanel key={generationId} data={resultadoIA} />
                 </CardContent>
               </Card>
             </div>
