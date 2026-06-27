@@ -151,7 +151,7 @@ function InputZone({
     }
   }
 
-  const handleGerarParametros = async () => {
+    const handleGerarParametros = async () => {
     if (!imagemSelecionada) {
       alert("Por favor, selecione ou envie uma foto primeiro.")
       return
@@ -159,22 +159,33 @@ function InputZone({
     setIsLoading(true)
     try {
       const base64String = await createPreviewDataUrl(imagemSelecionada)
+      
+      // 🟢 CORREÇÃO 1: Aponta para a rota unificada /api/gerar-preset que montamos
       const response = await fetch("/api/gerar-face", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           imageBase64: base64String,
           mimeType: imagemSelecionada.type || "image/jpeg",
+          landmarksFrente: (window as any).landmarksFrente || [] // 🟢 Envia landmarks se existirem no escopo global
         }),
       })
+
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || "Falha na requisição da API.")
       }
+
       const data = await response.json()
-      if (data.parameters) {
+      
+      // 🟢 CORREÇÃO 2: Valida tanto o data.parameters quanto a propriedade de sucesso do backend
+      if (data && data.parameters) {
         onParametrosGerados(data.parameters)
-        if (postToCommunity) await saveCommunityPost(data.parameters)
+        
+        if (postToCommunity) {
+          await saveCommunityPost(data.parameters)
+        }
+        
         alert("Parâmetros faciais gerados e aplicados com sucesso!")
       } else {
         throw new Error("A IA processou a imagem, mas não retornou a estrutura de parâmetros válida.")
@@ -186,6 +197,7 @@ function InputZone({
       setIsLoading(false)
     }
   }
+
 
   return (
     <Card className="flex h-full flex-col border-border bg-card">

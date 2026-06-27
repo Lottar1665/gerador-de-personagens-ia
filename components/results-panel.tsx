@@ -7,7 +7,11 @@ import { Badge } from "@/components/ui/badge"
 import { ParameterRow } from "@/components/parameter-row"
 import { faceParameters } from "@/lib/face-parameters"
 
+
 export function ResultsPanel({ data }: { data: any }) {
+
+  console.log("DADOS QUE A IA ESTÁ ENTREGANDO DE FATO:", data)
+
   // Estados para gerenciar as seleções dos carrosséis
   const [tabIndex, setTabIndex] = useState(0)          // Nível 1: Dropdown (Esqueleto, Pele, Preenchimento)
   const [macroIndex, setMacroIndex] = useState(0)      // Nível 2: Macro-Região (Cabeça, Testa, Olhos...)
@@ -72,7 +76,7 @@ export function ResultsPanel({ data }: { data: any }) {
     if (subTabs.length === 0) return
     setSubTabIndex((current) => (current + dir + subTabs.length) % subTabs.length)
   }
-  return (
+    return (
     // 🔒 TRAVA DE DESIGN: Altura imutável em h-[560px] mantém o espaço fixo igual ao seu print
     <div className="flex flex-col gap-4 w-full h-[560px] select-none">
       
@@ -185,6 +189,7 @@ export function ResultsPanel({ data }: { data: any }) {
             )
           )}
         </div>
+
         {/* Título Fixo dos Sliders */}
         <div className="pt-1 px-1 shrink-0">
           <h4 className="text-xs font-bold uppercase tracking-wider text-primary">
@@ -192,37 +197,70 @@ export function ResultsPanel({ data }: { data: any }) {
           </h4>
         </div>
 
-        {/* 🔒 Listagem Blindada: Mantém o espaço e impede oscilação do rodapé */}
-        <div className="flex-1 h-0 w-full overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-rounded scrollbar-track-transparent scrollbar-thumb-slate-700/40">
-          <div className="space-y-2 py-1">
-            {activeGroup?.map((group: any) =>
-              group?.sliders?.map((slider: { id: string; label: string; default: number }) => {
-                // Resgata com segurança o nó correto mapeado dinamicamente pelas chaves
-                const rawValue = data?.[tab.label]?.[activeSubTab?.label]?.[group.label]?.[slider.label]
-                const sliderValue = typeof rawValue === "number" ? rawValue : Number(rawValue ?? slider.default)
+                {/* Lista de Parâmetros com Rolagem Otimizada */}
+        <div className="flex-1 overflow-y-auto pr-1 space-y-2 content-start [scrollbar-width:thin]">
+          {activeGroup && activeGroup.length > 0 ? (
+            activeGroup.map((group: any, gIdx: number) => (
+              <div key={gIdx} className="space-y-1">
+                {group?.sliders?.map((slider: { id: string; label: string; labelAI: string; default: number }) => {
+                  
+                  // 1. Normaliza os textos para criar a chave combinada (ex: "esqueleto-olhos")
+                  // Garante letras minúsculas e remove espaços ou acentos se necessário
+                  const categoriaBase = (tab?.label || "Pele").toLowerCase();
+                  const macroBase = (activeMacro?.label || activeSubTab?.label || "").toLowerCase();
+                  
+                                    // 1. Coleta os nomes exatos das pastas do menu atual (idêntico ao back-end)
+                  const categoriaPai = tab?.label;        // Ex: "Pele" ou "Esqueleto"
+                  const macroRegiao = activeMacro?.label;  // Ex: "Cabeça" (undefined se não existir)
+                  const subAba = activeSubTab?.label;      // Ex: "Sobrancelhas" ou "Crânio"
+                  const subGrupo = group?.label;           // Ex: "Centro das sobrancelhas" ou "Ajustes"
+                  const nomeSlider = slider?.label;         // Ex: "Altura", "Espessura"
 
-                return (
-                  <ParameterRow
-                    key={slider.id}
-                    slider={{ ...slider, defaultValue: slider.default }}
-                    overrideValue={sliderValue}
-                  />
-                )
-              })
-            )}
-            
-            {(!activeGroup || activeGroup.length === 0) && (
-              <div className="flex h-full min-h-[200px] items-center justify-center text-center text-xs text-muted-foreground">
-                Nenhum parâmetro encontrado nesta seção.
+                  // Captura os parâmetros prontos enviados dentro do objeto 'parameters' da rota
+                  const dadosProntos = data?.parameters || data; 
+
+                  // 2. 🧠 LEITURA DIRETA DA ÁRVORE MASTIGADA DO BACK-END
+                  let rawValue: number | undefined = undefined;
+
+                  if (dadosProntos && categoriaPai) {
+                    // Caso A: Tem Macro-Região (Ex: Esqueleto -> Cabeça -> Crânio -> Ajustes -> Altura)
+                    if (macroRegiao) {
+                      rawValue = dadosProntos[categoriaPai]?.[macroRegiao]?.[subAba]?.[subGrupo]?.[nomeSlider];
+                    } 
+                    // Caso B: É categoria direta (Ex: Pele -> Sobrancelhas -> Centro das sobrancelhas -> Altura)
+                    else {
+                      rawValue = dadosProntos[categoriaPai]?.[subAba]?.[subGrupo]?.[nomeSlider];
+                    }
+                  }
+
+                  // 3. Aplica o valor numérico injetado pela IA ou cai no default do template do jogo
+                  const sliderValue = typeof rawValue === "number" ? rawValue : Number(slider.default);
+
+
+                  return (
+                    <ParameterRow
+                      key={slider.id}
+                      slider={{ ...slider, defaultValue: slider.default }}
+                      overrideValue={sliderValue} // Repassa o valor reativo correto
+                    />
+                  )
+                })}
               </div>
-            )}
-          </div>
+            ))
+          ) : (
+            <div className="flex h-full min-h-[200px] items-center justify-center text-center text-xs text-muted-foreground">
+              Nenhum parâmetro encontrado nesta seção.
+            </div>
+          )}
         </div>
+
+
 
         {/* Rodapé Fixo */}
         <p className="px-1 pt-1 text-center text-[11px] text-muted-foreground border-t border-border/20 shrink-0">
           Toque em um parâmetro para marcar como concluído
         </p>
+
       </div>
     </div>
   )

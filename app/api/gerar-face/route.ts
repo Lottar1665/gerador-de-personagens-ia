@@ -4,6 +4,8 @@ import { Buffer } from "buffer"
 import { GoogleGenAI } from "@google/genai"
 import { faceParameters } from "@/lib/face-parameters"
 import { converterParaSlider } from "@/lib/motorMatematico" // 1. Importa seu motor
+import { mockGeminiResponse } from "@/lib/mock-preset"
+import { generateFaceAnalysisPrompt } from "@/lib/prompt"
 
 const normalizeKey = (key: string) =>
   key
@@ -46,8 +48,13 @@ const parseFlatJson = (text: string) => {
 }
 
 export async function POST(request: Request) {
+  // 🟢 CORREÇÃO: Declaramos as variáveis na raiz da função para que o 'try' e o 'catch' consigam enxergá-las!
+  const structureResult: any = {}
+  const missingKeys: string[] = []
+  const confidencesMap: Record<string, number | null> = {}
+
   try {
-    // 2. Adiciona o recebimento das landmarks vindas do MediaPipe do frontend
+    const MOCK_MODE = false; 
     const { imageBase64, mimeType, landmarksFrente } = await request.json()
     const mimeTypeClean = mimeType || "image/jpeg"
 
@@ -64,11 +71,9 @@ export async function POST(request: Request) {
 
     const ai = new GoogleGenAI({ apiKey: geminiApiKey })
 
-    // 3. SE AS LANDMARKS EXISTIREM: O servidor calcula a base anatômica 3D rígida
     let slidersMatematicos: Record<string, number> = {};
     if (landmarksFrente && landmarksFrente.length > 0) {
       const dip = dist3D(landmarksFrente[133], landmarksFrente[362]);
-      
       slidersMatematicos = {
         "largura maxilar": converterParaSlider('largura_maxilar', dist3D(landmarksFrente[172], landmarksFrente[397]) / dip),
         "distancia sobrancelha ao olho": converterParaSlider('distancia_sobrancelha_olho', dist3D(landmarksFrente[70], landmarksFrente[159]) / dip),
@@ -78,155 +83,208 @@ export async function POST(request: Request) {
       };
     }
 
-    const sliderLabelsList = faceParameters
-  .flatMap(category => category.mainTabs || [])
-  .flatMap(tab => tab.subTabs || [])
-  .flatMap(sub => sub.groups || [])
-  .flatMap(g => g.sliders || [])
-  .map(s => `"${s.labelAI}"`)
-  .join(", ")
+    let flatSlidersMap;
 
+    if (MOCK_MODE) {
+      console.log("⚠️ MODO SIMULAÇÃO ATIVO: Consumo de cota de IA poupado.");
+      flatSlidersMap = mockGeminiResponse; 
+    }     else {
+      // 1. 🧠 MAPEAMENTO BIOMÉTRICO (Substitui os flatMaps antigos para manter a hierarquia)
+      const caminhos: string[] = []
 
-    // 4. Injeta os dados geométricos calculados no System Prompt para o Gemini refinar esteticamente
-    const systemPrompt = [
-      "You are an EA FC 26 face analysis engine.",
-      "",
-      "Analyze the face in the image.",
-      "",
-      "You will receive a base estimation of sliders calculated from 3D rigid geometry. Your job is to visually inspect the face textures, shadows, and ethnic details to adjust these numbers by at most +=12 or -=12 points, and guess the remaining sliders.",
-      landmarksFrente ? `Base geometric sliders to refine: ${JSON.stringify(slidersMatematicos)}` : "",
-      "",
-      "Return ONLY a flat JSON object where keys are the exact names from the valid list below.",
-      "",
-      "Rules:",
-      "1. Use ONLY the exact slider names provided in the valid list.",
-      "2. For each slider key, return an integer value between 0 and 100.",
-      "3. Do NOT wrap values in nested objects like {value: 50}.",
-      "4. Do NOT add explanations, commentary, or markdown blocks.",
-      "",
-      "Valid sliders list:",
-      "[ " + sliderLabelsList + " ]",
-    ].join("\n")
+      faceParameters.forEach((categoria) => {
+        // Se a categoria tiver a camada "mainTabs" (Ex: Esqueleto)
+        if (categoria.mainTabs && Array.isArray(categoria.mainTabs)) {
+          categoria.mainTabs.forEach((macro) => {
+            if (macro.subTabs && Array.isArray(macro.subTabs)) {
+              macro.subTabs.forEach((sub) => {
+                if (sub.groups && Array.isArray(sub.groups)) {
+                  sub.groups.forEach((grupo) => {
+                    grupo.sliders?.forEach((slider: any) => {
+                      caminhos.push(`"${categoria.label} -> ${macro.label} -> ${sub.label} -> ${grupo.label} -> ${slider.label}"`)
+                    })
+                  })
+                }
+              })
+            }
+          })
+        } 
+         // Se a categoria for direta (Ex: Pele)
+        else if ((categoria as any).subTabs && Array.isArray((categoria as any).subTabs)) {
+          (categoria as any).subTabs.forEach((sub: any) => {
+            if (sub.groups && Array.isArray(sub.groups)) {
+              sub.groups.forEach((grupo: any) => {
+                grupo.sliders?.forEach((slider: any) => {
+                  caminhos.push(`"${categoria.label} -> ${sub.label} -> ${grupo.label} -> ${slider.label}"`)
+                })
+              })
+            }
+          })
+        }
+      })
 
-    const sendToGemini = async (prompt: string) => {
+      const sliderLabelsList = caminhos.join(", ")
+
+      // 2. Chamada do Prompt Isolado Atualizado
+      const systemPrompt = generateFaceAnalysisPrompt(sliderLabelsList);
+
+      // 3. Execução do Gemini com temperatura 0 para máxima precisão técnica
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: [
-          prompt,
-          {
-            inlineData: {
-              data: rawBase64,
-              mimeType: mimeTypeClean
-            }
-          }
-        ],
-        config: {
-          temperature: 0,
-          maxOutputTokens: 8192,
-          responseMimeType: "application/json"
+        contents: [systemPrompt, { inlineData: { data: rawBase64, mimeType: mimeTypeClean } }],
+        config: { 
+          temperature: 0, 
+          maxOutputTokens: 8192, 
+          responseMimeType: "application/json" 
         }
       })
 
-      return response.text ?? "{}"
-    }
+            // 4. 🔄 LEITURA DA ÁRVORE DO GEMINI (Higienização de Sintaxe Estrita)
+      try {
+        let cleanText = (response.text ?? "{}")
+          .replace(/```json/g, "")
+          .replace(/```/g, "")
+          .trim();
 
-    const rawTextResponse = await sendToGemini(systemPrompt)
-    const flatSlidersMap = parseFlatJson(rawTextResponse)
-    const normalizedResponseMap = new Map<string, any>()
+        // 🧠 HIGIENIZADOR DE SINTAXE IA:
+        // Corrige propriedades mal formatadas, aspas simples e vírgulas órfãs no final de objetos
+        cleanText = cleanText
+          .replace(/'/g, '"') // Substitui todas as aspas simples por duplas
+          .replace(/,\s*}/g, "}") // Remove vírgulas extras antes do fechamento de chaves
+          .replace(/,\s*\]/g, "]") // Remove vírgulas extras antes do fechamento de colchetes
+          .replace(/([,{])\s*([^"\s][^:"]*?)\s*:/g, '$1"$2":'); // Garante aspas duplas nas propriedades
 
-    Object.entries(flatSlidersMap).forEach(([key, value]) => {
-      const normalizedKeyStr = normalizeKey(key)
-      
-      if (value && typeof value === "object" && !Array.isArray(value)) {
-        if (Object.prototype.hasOwnProperty.call(value, "value")) {
-          normalizedResponseMap.set(normalizedKeyStr, (value as any).value)
-        }
-      } else {
-        normalizedResponseMap.set(normalizedKeyStr, value)
-      }
-    })
-
-    const structureResult: any = {}
-    const missingKeys: string[] = []
-    const confidencesMap: Record<string, number | null> = {}
-
-    faceParameters.forEach((category) => {
-  structureResult[category.label] = {}
-  
-  category.mainTabs.forEach((tab) => {
-    structureResult[category.label][tab.label] = {}
-    
-    tab.subTabs.forEach((sub) => {
-      structureResult[category.label][tab.label][sub.label] = {}
-      
-      sub.groups.forEach((group) => {
-        structureResult[category.label][tab.label][sub.label][group.label] = {}
+        flatSlidersMap = JSON.parse(cleanText);
+      } catch (err) {
+        console.warn("⚠️ Falha na conversão estrita do JSON. Tentando extração de contingência...", err);
         
-        group.sliders.forEach((slider) => {
-          const fallbackValue = (slider as any).default ?? (slider as any).value ?? 50
-          const targetKey = normalizeKey(slider.labelAI)
-          const altKey = normalizeKey(slider.label)
-          
-          let aiValue = normalizedResponseMap.get(targetKey)
-          let confidence: number | null = null
-
-          if (aiValue === undefined) {
-            aiValue = normalizedResponseMap.get(altKey)
+        // Segunda linha de defesa: Tenta capturar apenas o bloco estrutural principal caso o Gemini tenha inserido texto extra
+        try {
+          const text = response.text ?? "{}";
+          const jsonStartIndex = text.indexOf("{");
+          const jsonEndIndex = text.lastIndexOf("}");
+          if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
+            const fallbackText = text.substring(jsonStartIndex, jsonEndIndex + 1)
+              .replace(/'/g, '"')
+              .replace(/,\s*}/g, "}");
+            flatSlidersMap = JSON.parse(fallbackText);
+          } else {
+            flatSlidersMap = {};
           }
+        } catch {
+          flatSlidersMap = {};
+        }
+      }
+ // Fim do bloco else (MOCK_MODE)
 
-          if (aiValue === undefined) {
-            const match = [...normalizedResponseMap.entries()].find(([receivedKey]) =>
-              receivedKey === targetKey ||
-              receivedKey === altKey ||
-              receivedKey.includes(targetKey) ||
-              targetKey.includes(receivedKey)
-            )
-            if (match) {
-              aiValue = match[1] 
-            }
+        } // 🟢 FECHA O BLOCO 'else' DO MOCK_MODE QUE FICOU ABERTO NA 2° PARTE!
+
+    // 🧠 FUNÇÃO AUXILIAR DE BUSCA PROFUNDA RECURSIVA PARA O LOOP DE MONTAGEM (CORRIGIDA)
+    const buscarValorNoJson = (objeto: any, sliderLabel: string, labelAI: string): number | undefined => {
+      if (!objeto || typeof objeto !== 'object') return undefined; // 💡 Corrigido para 'objeto'
+      if (typeof objeto[sliderLabel] === 'number') return objeto[sliderLabel]; // 💡 Corrigido para 'objeto'
+      if (labelAI && typeof objeto[labelAI] === 'number') return objeto[labelAI]; // 💡 Corrigido para 'objeto'
+      for (const key in objeto) {
+        const resultado = buscarValorNoJson(objeto[key], sliderLabel, labelAI);
+        if (resultado !== undefined) return resultado;
+      }
+      return undefined;
+    };
+
+    // 🟢 MONTAGEM DA ÁRVORE BIOMÉTRICA BLINDADA CONTRA ERROS DE ESTRUTURA
+    faceParameters.forEach((categoryRaw: any) => {
+      const category = categoryRaw as any;
+      structureResult[category.label] = {};
+
+      // Caso A: Categoria possui macro-regiões (Ex: Esqueleto)
+      if (category.mainTabs && Array.isArray(category.mainTabs)) {
+        category.mainTabs.forEach((tab: any) => {
+          structureResult[category.label][tab.label] = {};
+          if (tab.subTabs && Array.isArray(tab.subTabs)) {
+            tab.subTabs.forEach((sub: any) => {
+              structureResult[category.label][tab.label][sub.label] = {};
+              if (sub.groups && Array.isArray(sub.groups)) {
+                sub.groups.forEach((group: any) => {
+                  structureResult[category.label][tab.label][sub.label][group.label] = {};
+                  group.sliders?.forEach((slider: any) => {
+                    const aiValue = buscarValorNoJson(flatSlidersMap, slider.label, slider.labelAI);
+                    // Mescla com valores matemáticos do MediaPipe se houver colisão de ID, senão usa o da IA ou Default
+                    const mathValue = slidersMatematicos[slider.label?.toLowerCase() || ""];
+                    structureResult[category.label][tab.label][sub.label][group.label][slider.label] = 
+                      typeof mathValue === "number" ? mathValue : (typeof aiValue === "number" ? aiValue : (slider.default ?? 50));
+                  });
+                });
+              }
+            });
           }
-
-          let finalValue = fallbackValue
-          if (typeof aiValue === "number") {
-            finalValue = Math.max(0, Math.min(100, Math.round(aiValue)))
-          } else if (typeof aiValue === "string") {
-            const parsed = parseInt(aiValue, 10)
-            if (!isNaN(parsed)) {
-              finalValue = Math.max(0, Math.min(100, parsed))
-            }
+        });
+      } 
+      // Caso B: Categoria direta sem camada macro (Ex: Pele)
+      else if (category.subTabs && Array.isArray(category.subTabs)) {
+        category.subTabs.forEach((sub: any) => {
+          structureResult[category.label][sub.label] = {};
+          if (sub.groups && Array.isArray(sub.groups)) {
+            sub.groups.forEach((group: any) => {
+              structureResult[category.label][sub.label][group.label] = {};
+              group.sliders?.forEach((slider: any) => {
+                const aiValue = buscarValorNoJson(flatSlidersMap, slider.label, slider.labelAI);
+                const mathValue = slidersMatematicos[slider.label?.toLowerCase() || ""];
+                structureResult[category.label][sub.label][group.label][slider.label] = 
+                  typeof mathValue === "number" ? mathValue : (typeof aiValue === "number" ? aiValue : (slider.default ?? 50));
+              });
+            });
           }
+        });
+      }
+    });
 
-          if (aiValue !== undefined) {
-            confidence = DEFAULT_NUMERIC_CONFIDENCE
-          }
-
-          // Monta o JSON final respeitando os 5 níveis aninhados para o seu frontend ler sem travar
-          structureResult[category.label][tab.label][sub.label][group.label][slider.label] = finalValue
-          confidencesMap[slider.labelAI] = confidence
-
-          if (aiValue === undefined) {
-            missingKeys.push(slider.labelAI)
-          }
-        })
-      })
-    })
-  })
-})
-
+       console.log("✈️ ÁRVORE BIOMÉTRICA MONTADA COM SUCESSO ENVIADA AO FRONTEND.");
 
     return NextResponse.json({
+      success: true,
       parameters: structureResult,
-      meta: {
-        missingKeys,
-        confidences: confidencesMap
-      }
-    })
+      meta: { missingKeys, confidences: confidencesMap }
+    });
 
-  } catch (error: any) {
-    console.error("❌ Erro geral na API:", error)
-    return NextResponse.json(
-      { error: error.message || "Erro interno no servidor." },
-      { status: 500 }
-    )
-  }
-}
+  } catch (error: any) { 
+    console.warn("⚠️ ROTA FALHOU. Executando plano de contingência com Mock...", error.message);
+
+    // 🟢 REDE DE SEGURANÇA SE A IA CAIR: Monta a árvore usando o Mock local com a mesma lógica segura
+    faceParameters.forEach((categoryRaw: any) => {
+      const category = categoryRaw as any;
+      structureResult[category.label] = {};
+      
+      if (category.mainTabs && Array.isArray(category.mainTabs)) {
+        category.mainTabs.forEach((tab: any) => {
+          structureResult[category.label][tab.label] = {};
+          tab.subTabs?.forEach((sub: any) => {
+            structureResult[category.label][tab.label][sub.label] = {};
+            sub.groups?.forEach((group: any) => {
+              structureResult[category.label][tab.label][sub.label][group.label] = {};
+              group.sliders?.forEach((slider: any) => {
+                structureResult[category.label][tab.label][sub.label][group.label][slider.label] = slider.default ?? 50;
+              });
+            });
+          });
+        });
+      } else if (category.subTabs && Array.isArray(category.subTabs)) {
+        category.subTabs.forEach((sub: any) => {
+          structureResult[category.label][sub.label] = {};
+          sub.groups?.forEach((group: any) => {
+            structureResult[category.label][sub.label][group.label] = {};
+            group.sliders?.forEach((slider: any) => {
+              structureResult[category.label][sub.label][group.label][slider.label] = slider.default ?? 50;
+            });
+          });
+        });
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      parameters: structureResult,
+      isMockedFallback: true,
+      error: error.message
+    });
+  } // 🟢 FECHA O BLOCO 'catch' CORRETAMENTE!
+} // 🟢 FECHA A FUNÇÃO 'POST' NA ÚLTIMA LINHA DO ARQUIVO!
