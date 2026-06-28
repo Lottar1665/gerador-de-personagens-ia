@@ -1,10 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react" // 🟢 Adicionado useEffect
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signInWithPopup,
+  signInWithRedirect, // 🟢 Trocado popup por redirect
+  getRedirectResult,   // 🟢 Adicionado para capturar o retorno
   GoogleAuthProvider,
   FacebookAuthProvider,
 } from "firebase/auth"
@@ -47,6 +48,27 @@ export function AuthScreen() {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
+  // 🟢 NOVO: Captura o usuário automaticamente assim que ele retorna do redirecionamento do Google
+  useEffect(() => {
+    if (auth) {
+      setIsLoading(true)
+      getRedirectResult(auth)
+        .then((result) => {
+          if (result?.user) {
+            console.log("Usuário autenticado via redirecionamento:", result.user)
+          }
+        })
+        .catch((redirectError: any) => {
+          console.error("Erro no retorno do login social:", redirectError)
+          setError(`Erro ao processar login social: ${redirectError?.message || "Erro interno"}`)
+        })
+        .finally(() => {
+          setIsLoading(false)
+        })
+    }
+  }, [])
+
+  // 🟢 BLINDADO: Agora redireciona a página em vez de abrir pop-up travado
   const providerSignIn = async (provider: GoogleAuthProvider | FacebookAuthProvider) => {
     if (!auth) {
       setError("Firebase auth não está disponível no navegador.")
@@ -57,13 +79,12 @@ export function AuthScreen() {
     setIsLoading(true)
 
     try {
-      await signInWithPopup(auth, provider)
+      await signInWithRedirect(auth, provider) // 🛠️ Método alterado para evitar o erro Cross-Origin
     } catch (popupError: any) {
       console.error(popupError)
       setError(
         `Falha no login social (${popupError?.code || "erro desconhecido"}). Tente novamente.`,
       )
-    } finally {
       setIsLoading(false)
     }
   }

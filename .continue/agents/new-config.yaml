@@ -1,0 +1,13 @@
+name: Main Config
+version: 1.0.0
+schema: v1
+
+models:
+  - name: DeepSeek R1 8B
+    provider: ollama
+    model: deepseek-r1:8b
+
+tabAutocompleteModel:
+  name: qwen2.5-coder:1.5b-base
+  provider: ollama
+  model: qwen2.5-coder:1.5b-base

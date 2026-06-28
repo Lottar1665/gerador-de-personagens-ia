@@ -4,25 +4,25 @@ const stats = [
   { num: "12.4k", label: "Jogadores criados" },
   { num: "3.8k", label: "Usuários ativos" },
   { num: "98%", label: "Precisão facial" },
-  { num: "4.9★", label: "Avaliação" },
+  { num: "4.9★", label: "Avaliação" }
 ];
 
 const features = [
   {
     icon: "📸",
     title: "Envie sua foto",
-    desc: "Faça upload de qualquer foto com o rosto visível — nosso sistema cuida do resto.",
+    desc: "Faça upload de qualquer foto com o rosto visível — nosso sistema cuida do resto."
   },
   {
     icon: "🤖",
     title: "IA analisa seu rosto",
-    desc: "MediaPipe mapeia 468 pontos faciais e o Gemini traduz em atributos de jogador únicos.",
+    desc: "MediaPipe mapeia 468 pontos faciais e o Gemini traduz em atributos de jogador únicos."
   },
   {
     icon: "🎮",
     title: "Importe no EA FC 2026",
-    desc: "Exporte os dados do preset e use diretamente na criação de personagem do jogo.",
-  },
+    desc: "Exporte os dados do preset e use diretamente na criação de personagem do jogo."
+  }
 ];
 
 export default function HomePage() {
@@ -82,3 +82,4 @@ export default function HomePage() {
     </div>
   );
 }
+
