@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 import { Buffer } from "buffer"
 import { GoogleGenAI } from "@google/genai"
-import { faceParameters } from "@/lib/face-parameters"
-import { converterParaSlider } from "@/lib/motorMatematico" // 1. Importa seu motor
-import { mockGeminiResponse } from "@/lib/mock-preset"
-import { generateFaceAnalysisPrompt } from "@/lib/prompt"
+import { faceParameters } from "../../../lib/face-parameters";
+import { converterParaSlider } from "../../../lib/motorMatematico";
+import { mockGeminiResponse } from "../../../lib/mock-preset";
+import { generateFaceAnalysisPrompt } from "../../../lib/prompt";
 import { mapearArvoreBiometrica } from "./utils"
 
 const normalizeKey = (key: string) =>
